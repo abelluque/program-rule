@@ -1,0 +1,152 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips117.Denominator'
+when
+  $program: Program(rules contains 'measure.Mips.2019.Mips117')
+  $encounter: ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    withValueSet("MipsYear2019", "MIPS_117_ENCOUNTER")
+  )
+  $diagnosis: Diagnosis(
+    overlaps($encounter),
+    overlaps($program.measurementPeriod),
+    withValueSet("MipsYear2019", "DIABETES")
+  )
+  Patient(getAgeInYearsAt($encounter.startDate) >= 18 && getAgeInYearsAt($encounter.startDate) < 75)
+then
+  insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips117'));
+end
+
+rule 'Year2019.Mips117.Exclusion.denominator_exclusion'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips117')
+  $patient: Patient()
+  (
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE")
+    )
+    or exists ClinicalActivity(
+      overlaps($program.measurementPeriod),
+      withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips117', MeasureStatusValue.EXCLUSION, "denominator_exclusion");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips117', MeasureStatusValue.EXCLUSION, 'denominator_exclusion');
+end
+
+rule 'Year2019.Mips117.Success.2022F'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips117')
+  $patient: Patient()
+  (
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2019", "PERFORMANCE_MET_2022F"),
+      codeModifiers.isEmpty()
+    )
+    or exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("VsacYear2019", "RETINAL_OR_DILATED_EYE_EXAM")
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips117', MeasureStatusValue.SUCCESS, "2022F");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips117', MeasureStatusValue.SUCCESS, '2022F');
+end
+
+rule 'Year2019.Mips117.Success.2024F'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips117')
+  $patient: Patient()
+  (
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2019", "PERFORMANCE_MET_2024F"),
+      codeModifiers.isEmpty()
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips117', MeasureStatusValue.SUCCESS, "2024F");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips117', MeasureStatusValue.SUCCESS, '2024F');
+end
+
+rule 'Year2019.Mips117.Success.2026F'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips117')
+  $patient: Patient()
+  (
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2019", "PERFORMANCE_MET_2026F"),
+      codeModifiers.isEmpty()
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips117', MeasureStatusValue.SUCCESS, "2026F");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips117', MeasureStatusValue.SUCCESS, '2026F');
+end
+
+rule 'Year2019.Mips117.Success.3072F'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips117')
+  $patient: Patient()
+  (
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2019", "PERFORMANCE_MET_3072F")
+    )
+    or exists ClinicalActivity(
+      startsDuring($program.measurementPeriod.start.minusMonths(12), $program.measurementPeriod.end),
+      withValueSet("VsacYear2019", "RETINAL_OR_DILATED_EYE_EXAM"),
+      result == 'negative'
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips117', MeasureStatusValue.SUCCESS, "3072F");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips117', MeasureStatusValue.SUCCESS, '3072F');
+end
+
+rule 'Year2019.Mips117.Gap.2022F-8P'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips117')
+  $patient: Patient()
+  exists ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    withValueSet("MipsYear2019", "PERFORMANCE_NOT_MET_2022F_8P"),
+    codeModifiers contains '8P'
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips117', MeasureStatusValue.GAP, '2022F-8P');
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips117', MeasureStatusValue.GAP, '2022F-8P');
+end
+
+rule 'Year2019.Mips117.Gap.2024F-8P'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips117')
+  $patient: Patient()
+  exists ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    withValueSet("MipsYear2019", "PERFORMANCE_NOT_MET_2024F_8P"),
+    codeModifiers contains '8P'
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips117', MeasureStatusValue.GAP, '2024F-8P');
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips117', MeasureStatusValue.GAP, '2024F-8P');
+end
+
+rule 'Year2019.Mips117.Gap.2026F-8P'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips117')
+  $patient: Patient()
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips117', MeasureStatusValue.GAP, '2026F-8P');
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips117', MeasureStatusValue.GAP, '2026F-8P');
+end

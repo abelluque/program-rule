@@ -1,0 +1,66 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+declare HedisDdeRate3KidneyDisease
+    kidneyDisease: QdmDatatype
+end
+
+rule 'Year2018.Hedis.DdeRate3.KidneyDiseaseDiagnosis'
+when
+    $program: Program(rules contains 'measure.Hedis.2018.DdeRate3')
+    $kidneyDisease: Diagnosis(
+        startsDuring($program.measurementPeriod.end.minusMonths(24).plusDays(1),$program.measurementPeriod.end.minusMonths(1)),
+        withValueSet("HedisYear2018", "CKD_STAGE_4") || withValueSet("HedisYear2018", "KIDNEY_TRANSPLANT") || withValueSet("HedisYear2018", "ESRD")
+    )
+then
+    insert(new HedisDdeRate3KidneyDisease($kidneyDisease));
+end
+
+rule 'Year2018.Hedis.DdeRate3.KidneyDiseaseClinicalActivity'
+when
+    $program: Program(rules contains 'measure.Hedis.2018.DdeRate3')
+    $kidneyDisease: ClinicalActivity(
+        startsDuring($program.measurementPeriod.end.minusMonths(24).plusDays(1),$program.measurementPeriod.end.minusMonths(1)),
+        withValueSet("HedisYear2018", "ESRD") || withValueSet("HedisYear2018", "KIDNEY_TRANSPLANT")
+    )
+then
+    insert(new HedisDdeRate3KidneyDisease($kidneyDisease));
+end
+
+rule 'Year2018.Hedis.DdeRate3.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2018.DdeRate3')
+    $patient: Patient(getAgeInYearsAt($program.measurementPeriod.end) >= 67)
+    HedisDdeRate3KidneyDisease($kidneyDisease: kidneyDisease)
+    not ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2018", "MIPS_HOSPICE_SERVICE") || withValueSet("VsacYear2018", "PALLIATIVE_CARE")
+    )
+then
+    insert(new PatientDenominator($program, $patient, 'Year2018.DdeRate3'));
+end
+
+rule 'Year2018.Hedis.DdeRate3.SuccessReasons.PerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2018.DdeRate3')
+    HedisDdeRate3KidneyDisease($kidneyDisease: kidneyDisease)
+    exists Medication(
+        startsDuring($kidneyDisease.start,$program.measurementPeriod.end),
+        withValueSet("HedisYear2018", "COX_2_SELECTIVE_NSAIDS_AND_NONASPIRIN_NSAIDS_MEDICATIONS"),
+        prescribed == true
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.DdeRate3', MeasureStatusValue.SUCCESS, 'performance_met');
+end
+
+rule 'Year2018.Hedis.DdeRate3.GapReasons.PerformanceNotMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2018.DdeRate3')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.DdeRate3', MeasureStatusValue.GAP, 'performance_not_met');
+end

@@ -1,0 +1,83 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Ppc2.Denominator'
+when
+	$program: Program(rules contains 'measure.Hedis.2019.Ppc2')
+	$patient: Patient(
+		isFemale()
+	)
+	$encounter: ClinicalActivity(
+		startsDuring(
+			$program.measurementPeriod.start.minusDays(56),
+			$program.measurementPeriod.end.minusDays(56)
+		),
+		withValueSet("HedisYear2019", "DELIVERIES")
+	)
+	and not (
+		exists Diagnosis(
+			startsDuring($encounter),
+			withValueSet("HedisYear2019", "NON_LIVE_BIRTHS")
+		)
+	)
+	and	not (
+		exists ClinicalActivity(
+			startsDuring(
+				$encounter.startDate.minusMonths(6),
+				$encounter.startDate.minusDays(1)
+			),
+			withValueSet("HedisYear2019", "DELIVERIES")
+		)
+	)
+	and not (
+		exists ClinicalActivity(
+			startsDuring($program.measurementPeriod),
+			withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+			withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+		)
+	)
+then
+	insert(new EncounterDenominator($program, $encounter, 'Year2019.Ppc2'));
+end
+
+rule 'Year2019.Ppc2.Success.performance_met'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Ppc2')
+	(
+		exists ClinicalActivity(
+			startsDuring($encounter.startDate.plusDays(21), $encounter.startDate.plusDays(56)),
+			withValueSet("HedisYear2019", "CERVICAL_CYTOLOGY") ||
+			withValueSet("HedisYear2019", "POSTPARTUM_VISITS") ||
+			withValueSet("HedisYear2019", "POSTPARTUM_BUNDLED_SERVICES")
+		)
+		or
+		exists Diagnosis(
+			startsDuring($encounter.startDate.plusDays(21), $encounter.startDate.plusDays(56)),
+			withValueSet("HedisYear2019", "POSTPARTUM_VISITS")
+		)
+		or
+		exists ClinicalActivity(
+			startsDuring($encounter.startDate.plusDays(21), $encounter.startDate.plusDays(56)),
+			withValueSet("HedisYear2019", "POSTPARTUM_VISITS")
+		)
+		or
+		exists LaboratoryTestPerformed(
+			startsDuring($encounter.startDate.plusDays(21), $encounter.startDate.plusDays(56)),
+			withValueSet("HedisYear2019", "CERVICAL_CYTOLOGY")
+		)
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Ppc2', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Ppc2.Gap.performance_not_met'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Ppc2')
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Ppc2', MeasureStatusValue.GAP, "performance_not_met");
+end

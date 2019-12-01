@@ -1,0 +1,65 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2018.Mips255.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2018.Mips255')
+    $mips255encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        placeOfService == '23',
+        withValueSet("MipsYear2018", "MIPS_255_ENCOUNTER")
+    )
+    exists Diagnosis(
+        overlaps($mips255encounter),
+        withValueSet("MipsYear2018", "RH_NEGATIVE")
+    )
+    exists Diagnosis(
+        overlaps($mips255encounter),
+        withValueSet("MipsYear2018", "HIGH_RISK_PREGNANCY_COMPLICATION")
+    )
+    Patient(
+        getAgeInYearsAt($mips255encounter.startDate) >= 15,
+        getAgeInYearsAt($mips255encounter.startDate) < 50,
+        sex == "female"
+    )
+then
+    insert(new EncounterDenominator($program, $mips255encounter, 'Year2018.Mips255'));
+end
+
+rule 'Year2018.Mips255.Success.MipsG8809'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips255')
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("MipsYear2018", "PERFORMANCE_MET_G8809")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips255', MeasureStatusValue.SUCCESS, "G8809");
+end
+
+rule 'Year2018.Mips255.Exception.G8810'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips255')
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("MipsYear2018", "DENOMINATOR_EXCEPTION_G8810")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips255', MeasureStatusValue.EXCEPTION, "G8810");
+end
+
+rule 'Year2018.Mips255.Gap.G8811'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips255')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips255', MeasureStatusValue.GAP, "G8811");
+end

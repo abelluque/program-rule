@@ -1,0 +1,182 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+declare Mips118Rate2TwoOrgEncounters
+  encounter: ClinicalActivity
+end
+
+declare Mips118Rate2TwoProviderEncounters
+  providerEncounter: ClinicalActivity
+end
+
+declare Mips118Rate2Success
+end
+
+declare Mips118Rate2Exception
+end
+
+rule 'Year2019.Mips118Rate2.TwoEncounters.Org'
+// Looks for existence of two encounters with any provider
+when
+  $program: Program(rules contains 'measure.Mips.2019.Mips118Rate2')
+  $encounter: ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    placeOfService != '02',
+    codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+    withValueSet("MipsYear2019", "MIPS_118_ENCOUNTER")
+  )
+  accumulate(
+    ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      placeOfService != '02',
+      codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+      withValueSet("MipsYear2019", "MIPS_118_ENCOUNTER")
+    );
+    $encounterCount: count(1);
+    $encounterCount >= 2
+  )
+then
+  insert(new Mips118Rate2TwoOrgEncounters($encounter));
+end
+
+rule 'Year2019.Mips118Rate2.TwoEncounters.Provider'
+// Looks for existence of two encounters with the same provider for the provider cache
+when
+  $program: Program(rules contains 'measure.Mips.2019.Mips118Rate2')
+  $providerEncounter: ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    placeOfService != '02',
+    codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+    withValueSet("MipsYear2019", "MIPS_118_ENCOUNTER")
+  )
+  accumulate(
+    ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      placeOfService != '02',
+      codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+      withValueSet("MipsYear2019", "MIPS_118_ENCOUNTER"),
+      providerExternalId == $providerEncounter.providerExternalId
+    );
+    $encounterCount: count(1);
+    $encounterCount >= 2
+  )
+then
+  insert(new Mips118Rate2TwoProviderEncounters($providerEncounter));
+end
+
+rule 'Year2019.Mips118Rate2.Denominator'
+when
+  $program: Program(rules contains 'measure.Mips.2019.Mips118Rate2')
+  Mips118Rate2TwoOrgEncounters($encounter: encounter)
+  exists Diagnosis(
+      overlaps($encounter),
+      withValueSet("MipsYear2019", "MIPS_118_CAD")
+  )
+  exists Diagnosis(
+      overlaps($encounter),
+      withValueSet("MipsYear2019", "MIPS_118_DIABETES")
+  )
+  Patient(
+      getAgeInYearsAt($encounter.startDate) >= 18
+  )
+then
+  insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips118Rate2'));
+end
+
+rule 'Year2019.Mips118Rate2.Success.G8473'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips118Rate2')
+  (
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2019", "PERFORMANCE_MET_G8935") || withValueSet("MipsYear2019", "PERFORMANCE_MET_G8473")
+    )
+    or exists Medication(
+      overlaps($program.measurementPeriod),
+      withValueSet("VsacYear2019", "ACE_INHIBITOR_OR_ARB")
+    )
+  )
+then
+    insert(new Mips118Rate2Success());
+end
+
+rule 'Year2019.Mips118Rate2.Exception.G8474'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips118Rate2')
+  (
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G8936") || withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G8474")
+    )
+    or exists Allergy(
+      overlaps($program.measurementPeriod),
+      withValueSet("VsacYear2019", "ACE_INHIBITOR_OR_ARB_INGREDIENT")
+    )
+    or exists Diagnosis(
+      overlaps($program.measurementPeriod),
+      withValueSet("VsacYear2019", "ALLERGY_TO_ACE_INHIBITOR_OR_ARB") || withValueSet("VsacYear2019", "PREGNANCY")
+    )
+  )
+then
+    insert(new Mips118Rate2Exception());
+end
+
+rule 'Year2019.Mips118Rate2.Success.G8473.Org'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips118Rate2')
+  $patient: Patient()
+  Mips118Rate2Success()
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips118Rate2', MeasureStatusValue.SUCCESS, "G8473");
+end
+
+rule 'Year2019.Mips118Rate2.Success.G8473.Provider'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips118Rate2')
+  $patient: Patient()
+  Mips118Rate2Success()
+  Mips118Rate2TwoProviderEncounters($providerEncounter: providerEncounter)
+then
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $providerEncounter.providerExternalId, 'Year2019.Mips118Rate2', MeasureStatusValue.SUCCESS, 'G8473');
+end
+
+rule 'Year2019.Mips118Rate2.Exception.G8474.Org'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips118Rate2')
+  $patient: Patient()
+  Mips118Rate2Exception()
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips118Rate2', MeasureStatusValue.EXCEPTION, "G8474");
+end
+
+rule 'Year2019.Mips118Rate2.Exception.G8474.Provider'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips118Rate2')
+  $patient: Patient()
+  Mips118Rate2Exception()
+  Mips118Rate2TwoProviderEncounters($providerEncounter: providerEncounter)
+then
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $providerEncounter.providerExternalId, 'Year2019.Mips118Rate2', MeasureStatusValue.EXCEPTION, 'G8474');
+end
+
+rule 'Year2019.Mips118Rate2.Gap.G8475.Org'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips118Rate2')
+  $patient: Patient()
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips118Rate2', MeasureStatusValue.GAP, "G8475");
+end
+
+rule 'Year2019.Mips118Rate2.Gap.G8475.Provider'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips118Rate2')
+  $patient: Patient()
+  Mips118Rate2TwoProviderEncounters($providerEncounter: providerEncounter)
+then
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $providerEncounter.providerExternalId, 'Year2019.Mips118Rate2', MeasureStatusValue.GAP, 'G8475');
+end

@@ -1,0 +1,69 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import java.util.Collection;
+
+global PatientResults controlSet;
+global Collection<Provider> providers;
+
+rule 'Year2019.Stage3sm.Denominator'
+when
+    $program: Program(rules contains 'measure.Pi.2019.Stage3sm')
+    $encounter: Encounter(
+        startsDuring($program.piMeasurementPeriod)
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Stage3sm'));
+end
+
+rule 'Year2019.Stage3sm.Success.performance_met.Org'
+when
+    EncounterDenominator($program: program, $encounter: encounter, measure == 'Year2019.Stage3sm')
+    $patient: Patient()
+    exists SystemEvent(
+        startsDuringYear($program.piMeasurementPeriod),
+        eventType == "SECURE_MESSAGE"
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Stage3sm', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Stage3sm.Success.performance_met.Provider'
+when
+    EncounterDenominator($program: program, $encounter: encounter, measure == 'Year2019.Stage3sm')
+    $patient: Patient()
+    exists SystemEvent(
+        startsDuringYear($program.piMeasurementPeriod),
+        eventType == "SECURE_MESSAGE",
+        providerExternalId == $encounter.providerExternalId
+    )
+then
+    controlSet.addProviderPatientMeasureStatusesForMatchingProviders($program, $patient, $encounter.providerExternalId,'Year2019.Stage3sm', MeasureStatusValue.SUCCESS, "performance_met", providers);
+end
+
+rule 'Year2019.Stage3sm.Success.performance_met.Group'
+when
+    EncounterDenominator($program: program, $encounter: encounter, measure == 'Year2019.Stage3sm')
+    $patient: Patient()
+    exists SystemEvent(
+        startsDuringYear($program.piMeasurementPeriod),
+        eventType == "SECURE_MESSAGE",
+        groupExternalId == $encounter.groupExternalId
+    )
+then
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Stage3sm', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Stage3sm.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $encounter: encounter, measure == 'Year2019.Stage3sm')
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Stage3sm', MeasureStatusValue.GAP, "performance_not_met");
+    controlSet.addProviderPatientMeasureStatusesForMatchingProviders($program, $patient, $encounter.providerExternalId,'Year2019.Stage3sm', MeasureStatusValue.GAP, "performance_not_met", providers);
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId, 'Year2019.Stage3sm', MeasureStatusValue.GAP, "performance_not_met");
+end
+

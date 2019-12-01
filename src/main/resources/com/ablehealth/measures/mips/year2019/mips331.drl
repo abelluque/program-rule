@@ -1,0 +1,88 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips331.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips331')
+    $mips331encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        placeOfService != '02',
+        codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+        withValueSet("MipsYear2019", "MIPS_331_ENCOUNTER")
+    )
+    exists Diagnosis(
+        startsDuring($mips331encounter),
+        withValueSet("MipsYear2019", "ACUTE_SINUSITIS")
+    )
+    Patient(
+        getAgeInYearsAt($mips331encounter.startDate) >= 18
+    )
+then
+    insert(new EncounterDenominator($program, $mips331encounter, 'Year2019.Mips331'));
+end
+
+declare HasMedication
+    encounter: Encounterable
+end
+
+rule 'Year2019.Mips331.HasMedication'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips331')
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter.startDate,$encounter.startDate.plusDays(10)),
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_G9286")
+        )
+        or exists Medication(
+            startsDuring($encounter.startDate,$encounter.startDate.plusDays(10)),
+            prescribed == true,
+            withValueSet("AbleYear2016", "SYSTEMIC_ANTIBIOTICS"),
+            providerExternalId == $encounter.providerExternalId
+        )
+    )
+then
+    insert(new HasMedication($encounter));
+end
+
+rule 'Year2019.Mips331.Exception.G9505'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips331')
+    HasMedication(encounter == $encounter)
+    (
+         exists ClinicalActivity(
+             startsDuring($encounter.startDate,$encounter.startDate.plusDays(10)),
+             withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G9505")
+         )
+         or exists Diagnosis(
+             overlaps($encounter.startDate,$encounter.startDate.plusDays(10)),
+             withValueSet("AbleYear2016", "COMPETING_CONDITIONS_FOR_SINUSITIS")
+         )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips331', MeasureStatusValue.EXCEPTION, "G9505");
+end
+
+rule 'Year2019.Mips331.Success.G9286'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips331')
+    HasMedication(encounter == $encounter)
+    not ClinicalActivity(
+        startsDuring($encounter.startDate,$encounter.startDate.plusDays(10)),
+        withValueSet("MipsYear2019", "PERFORMANCE_NOT_MET_G9287")
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips331', MeasureStatusValue.SUCCESS, "G9286");
+end
+
+rule 'Year2019.Mips331.Gaps.G9287'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips331')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips331', MeasureStatusValue.GAP, "G9287");
+end
+

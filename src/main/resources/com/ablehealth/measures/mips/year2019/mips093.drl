@@ -1,0 +1,84 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips093.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips093')
+    $mips093encounter: ClinicalActivity(
+        withValueSet("MipsYear2019", "MIPS_093_ENCOUNTER"),
+        startsDuring($program.measurementPeriod),
+        placeOfService != '02',
+        codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95'
+    )
+    $aoeDiagnosis: Diagnosis(
+        withValueSet("MipsYear2019", "ACUTE_OTITIS_EXTERNA_AOE"),
+        startsDuring($program.measurementPeriod),
+        startsDuring($mips093encounter)
+    )
+    not ClinicalActivity(
+        withValueSet("MipsYear2019", "MIPS_093_ENCOUNTER"),
+        startsDuring($program.measurementPeriod),
+        placeOfService != '02',
+        codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+        startsOnOrAfter($mips093encounter.startDate.minusDays(30)),
+        startDate.isBefore($mips093encounter.startDate)
+    )
+    $patient: Patient(getAgeInYearsAt($mips093encounter.startDate) >= 2)
+then
+    insert(new EncounterDenominator($program, $mips093encounter, 'Year2019.Mips093'));
+end
+
+rule 'Year2019.Mips093.Success.4132F'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips093')
+    (
+        exists ClinicalActivity(
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_4132F"),
+            startsDuring($program.measurementPeriod),
+            startsDuring($encounter.startDate, $encounter.startDate.plusDays(30)),
+            codeModifiers.isEmpty
+        )
+        or
+        not Medication(
+            withValueSet("AbleYear2016", "SYSTEMIC_ANTIBIOTICS"),
+            startsDuring($program.measurementPeriod),
+            startsDuring($encounter.startDate, $encounter.startDate.plusDays(30)),
+            prescribed == true
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips093', MeasureStatusValue.SUCCESS, "4132F");
+end
+
+rule 'Year2019.Mips093.Exception.4131F-1P'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips093')
+    (
+        exists ClinicalActivity(
+            withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_4131F_1P"),
+            startsDuring($program.measurementPeriod),
+            startsDuring($encounter),
+            codeModifiers contains '1P'
+        )
+        or
+        exists Diagnosis(
+            (withValueSet("VsacYear2019", "DIABETES") || withValueSet("AbleYear2016", "IMMUNODEFICIENT_CONDITIONS")),
+            overlaps($encounter)
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips093', MeasureStatusValue.EXCEPTION, "4131F-1P");
+end
+
+rule 'Year2019.Mips093.Gap.4131F'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips093')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips093', MeasureStatusValue.GAP, "4131F");
+end
+

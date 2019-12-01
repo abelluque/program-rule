@@ -1,0 +1,59 @@
+package com.ablehealth.measures.hedis.year2019;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Pce1.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2019.Pce1')
+    $encounter:ClinicalActivity(
+		startsDuring($program.measurementPeriod.start,$program.measurementPeriod.end.plusDays(1).minusMonths(1)),
+		withValueSet("HedisYear2019", "ED") ||
+		withValueSet("HedisYear2019", "INPATIENT_STAY")
+	)
+	and exists Diagnosis(
+			startsDuring($encounter),
+			withValueSet("HedisYear2019", "COPD") ||
+			withValueSet("HedisYear2019", "EMPHYSEMA") ||
+			withValueSet("HedisYear2019", "CHRONIC_BRONCHITIS")
+		)
+		
+    $patient: Patient(getAgeInYearsAt($program.measurementPeriod.start) >= 40)
+    
+	and( not (ClinicalActivity(
+			startsDuring($encounter),
+			withValueSet("HedisYear2019", "NONACUTE_INPATIENT"))
+		)
+	)
+	and( not ClinicalActivity(
+			startsDuring($program.measurementPeriod),
+			withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+			withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+		)
+	)
+then	
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Pce1'));
+end
+
+rule 'Year2019.Pce1.Success.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Pce1')
+	Medication(
+		overlaps($encounter.startDate,$encounter.startDate.plusDays(14)),
+		withValueSet("NcqaYear2019", "SYSTEMIC_CORTICOSTEROID_MEDICATIONS") ||
+		withValueSet("VsacYear2019", "CORTICOSTEROIDS")
+	)
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Pce1', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Pce1.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Pce1')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Pce1', MeasureStatusValue.GAP, "performance_not_met");
+end
+

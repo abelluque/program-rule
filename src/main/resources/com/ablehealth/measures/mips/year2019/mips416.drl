@@ -1,0 +1,72 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips416.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips416')
+    $mips416encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_416_ENCOUNTER")
+    )
+    exists Diagnosis(
+        startsDuring($mips416encounter),
+        withValueSet("MipsYear2019", "MINOR_BLUNT_HEAD_TRAUMA")
+    )
+    exists ClinicalActivity(
+        startsDuring($mips416encounter),
+        withValueSet("MipsYear2019", "GCS_OF_15_AND_CT_ORDERED")
+    )
+    Patient(
+        getAgeInYearsAt($mips416encounter.startDate) >= 2,
+        getAgeInYearsAt($mips416encounter.startDate) < 18
+    )
+then
+    insert(new EncounterDenominator($program, $mips416encounter, 'Year2019.Mips416'));
+end
+
+rule 'Year2019.Mips416.Exclusion.Exclusion1'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips416')
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("MipsYear2019", "DENOMINATOR_EXCLUSION_G9531")
+        )
+        or exists Diagnosis(
+            overlaps($encounter),
+            (withValueSet("VsacYear2019", "VENTRICULAR_SHUNT") || withValueSet("VsacYear2019", "BRAIN_TUMOR") || withValueSet("VsacYear2019", "TRAUMA_EXCLUDING_HEAD") || withValueSet("VsacYear2019", "PREGNANCY"))
+        )
+        or exists Medication(
+            overlaps($encounter),
+            withValueSet("VsacYear2019", "ASPIRIN_AND_OTHER_ANTIPLATELETS")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips416', MeasureStatusValue.EXCLUSION, "exclusion_1");
+end
+
+rule 'Year2019.Mips416.Success.G9593'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips416')
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_G9593")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips416', MeasureStatusValue.SUCCESS, "G9593");
+end
+
+rule 'Year2019.Mips416.Gaps.G9597'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips416')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips416', MeasureStatusValue.GAP, "G9597");
+end
+

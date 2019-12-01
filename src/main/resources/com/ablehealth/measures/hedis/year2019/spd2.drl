@@ -1,0 +1,274 @@
+package com.ablehealth.measures.hedis.year2019;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+import java.time.temporal.ChronoUnit;
+
+import accumulate com.ablehealth.functions.EarliestMedicationAccumulateFunction earliestMedication;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Spd2.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2019.Spd2')
+    $patient: Patient(
+        getAgeInYearsAt($program.measurementPeriod.end) >= 40 &&
+        getAgeInYearsAt($program.measurementPeriod.end) <= 75
+    )
+    and not (
+        exists (
+            ClinicalActivity(
+                startsDuring($program.measurementPeriod),
+                withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+                withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+            )
+        )
+    )
+    and (
+        exists (
+            Diagnosis(
+                startsOnOrBefore($program.measurementPeriod.end) &&
+                (stopDate == null || endsAfter($program.measurementPeriod.end)),
+                withValueSet("HedisYear2019", "DIABETES")
+            )
+        )
+        or exists (
+            $acuteEncounter: ClinicalActivity(
+                startsDuring(
+                    $program.measurementPeriod.end.plusDays(1).minusMonths(24),
+                    $program.measurementPeriod.end
+                ),
+                withValueSet("HedisYear2019", "ACUTE_INPATIENT")
+            )
+            and Diagnosis(
+                startsDuring($acuteEncounter),
+                withValueSet("HedisYear2019", "DIABETES")
+            )
+        )
+        or exists (
+            Medication(
+                startsDuring(
+                    $program.measurementPeriod.end.plusDays(1).minusMonths(24),
+                    $program.measurementPeriod.end
+                ),
+                withValueSet("NcqaYear2019", "DIABETES_MEDICATIONS")
+            )
+        )
+        or accumulate (
+            (
+                $nonAcuteEncounter: ClinicalActivity(
+                    startsDuring(
+                        $program.measurementPeriod.end.plusDays(1).minusMonths(24),
+                        $program.measurementPeriod.end
+                    ),
+                    withValueSet("HedisYear2019", "OUTPATIENT") ||
+                    withValueSet("HedisYear2019", "OBSERVATION") ||
+                    withValueSet("HedisYear2019", "ED") ||
+                    withValueSet("HedisYear2019", "NONACUTE_INPATIENT")
+                )
+                and exists (
+                    Diagnosis(
+                        startsDuring($nonAcuteEncounter),
+                        withValueSet("HedisYear2019", "DIABETES")
+                    )
+                )
+            );
+            $nonAcuteEncounters: count(1);
+            $nonAcuteEncounters >= 2
+        )
+    )
+    and exists (
+        Medication(
+            prescribed == true,
+            startsDuring($program.measurementPeriod),
+            withValueSet("NcqaYear2019", "LOW_INTENSITY_STATIN_MEDICATIONS") ||
+            withValueSet("NcqaYear2019", "HIGH_AND_MODERATE_INTENSITY_STATIN_MEDICATIONS")
+        )
+    )
+then
+    insert(new PatientDenominator($program, $patient, 'Year2019.Spd2'));
+end
+
+rule 'Year2019.Spd2.Exclusion.exclusion_1'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Spd2')
+    and (
+        (
+            exists (
+                $encounterCurrentYear: ClinicalActivity(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("HedisYear2019", "OUTPATIENT") ||
+                    withValueSet("HedisYear2019", "ACUTE_INPATIENT")
+                )
+                and Diagnosis(
+                    startsDuring($encounterCurrentYear),
+                    withValueSet("HedisYear2019", "IVD")
+                )
+            )
+            and exists (
+                $encounterPriorYear: ClinicalActivity(
+                    startsDuring(
+                        $program.measurementPeriod.start.minusYears(1),
+                        $program.measurementPeriod.start.minusDays(1)
+                    ),
+                    withValueSet("HedisYear2019", "OUTPATIENT") ||
+                    withValueSet("HedisYear2019", "ACUTE_INPATIENT")
+                )
+                and Diagnosis(
+                    startsDuring($encounterPriorYear),
+                    withValueSet("HedisYear2019", "IVD")
+                )
+            )
+        )
+        or exists (
+            Diagnosis(
+                startsDuring($program.measurementPeriod),
+                withValueSet("HedisYear2019", "MUSCULAR_PAIN_AND_DISEASE")
+            )
+        )
+        or exists (
+            ClinicalActivity(
+                startsDuring(
+                    $program.measurementPeriod.start.minusYears(1),
+                    $program.measurementPeriod.start.minusDays(1)
+                ),
+                withValueSet("HedisYear2019", "PCI") ||
+                withValueSet("HedisYear2019", "CABG") ||
+                withValueSet("HedisYear2019", "OTHER_REVASCULARIZATION")
+            )
+        )
+        or exists (
+            $encounterWithMi: ClinicalActivity(
+                startsDuring(
+                    $program.measurementPeriod.start.minusYears(1),
+                    $program.measurementPeriod.start.minusDays(1)
+                ),
+                withValueSet("HedisYear2019", "INPATIENT_STAY")
+            )
+            and Diagnosis(
+                startsDuring($encounterWithMi),
+                withValueSet("HedisYear2019", "MI")
+            )
+        )
+        or exists (
+            Diagnosis(
+                startsDuring(
+                    $program.measurementPeriod.end.plusDays(1).minusMonths(24),
+                    $program.measurementPeriod.end
+                ),
+                withValueSet("HedisYear2019", "ESRD") ||
+                withValueSet("HedisYear2019", "CIRRHOSIS")
+            )
+        )
+        or exists (
+            ClinicalActivity(
+                startsDuring(
+                    $program.measurementPeriod.end.plusDays(1).minusMonths(24),
+                    $program.measurementPeriod.end
+                ),
+                withValueSet("HedisYear2019", "ESRD")
+            )
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Spd2', MeasureStatusValue.EXCLUSION, "exclusion_1");
+end
+
+rule 'Year2019.Spd2.Exclusion.exclusion_2'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Spd2')
+    and (
+        exists (
+            Diagnosis(
+                startsDuring(
+                    $program.measurementPeriod.end.plusDays(1).minusMonths(24),
+                    $program.measurementPeriod.end
+                ),
+                withValueSet("HedisYear2019", "PREGNANCY")
+            )
+        )
+        or exists (
+            ClinicalActivity(
+                startsDuring(
+                    $program.measurementPeriod.end.plusDays(1).minusMonths(24),
+                    $program.measurementPeriod.end
+                ),
+                withValueSet("HedisYear2019", "IVF")
+            )
+        )
+        or exists (
+            Medication(
+                startsDuring(
+                    $program.measurementPeriod.end.plusDays(1).minusMonths(24),
+                    $program.measurementPeriod.end
+                ),
+                withValueSet("NcqaYear2019", "ESTROGEN_AGONISTS_MEDICATIONS")
+            )
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Spd2', MeasureStatusValue.EXCLUSION, "exclusion_2");
+end
+
+rule 'Year2019.Spd2.Exclusion.exclusion_3'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Spd2')
+    and (
+        exists (
+            Diagnosis(
+                startsDuring(
+                    $program.measurementPeriod.end.plusDays(1).minusMonths(24),
+                    $program.measurementPeriod.end
+                ),
+                withValueSet("HedisYear2019", "DIABETES_EXCLUSIONS")
+            )
+        )
+    )
+    and not (
+        exists (
+            Diagnosis(
+                startsDuring(
+                    $program.measurementPeriod.end.plusDays(1).minusMonths(24),
+                    $program.measurementPeriod.end
+                ),
+                withValueSet("HedisYear2019", "DIABETES")
+            )
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Spd2', MeasureStatusValue.EXCLUSION, "exclusion_3");
+end
+
+rule 'Year2019.Spd2.Success.performance_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Spd2')
+    $earliestMedication: Medication() from accumulate (
+        $m: Medication(
+            startsDuring($program.measurementPeriod),
+            withValueSet("NcqaYear2019", "LOW_INTENSITY_STATIN_MEDICATIONS") ||
+            withValueSet("NcqaYear2019", "HIGH_AND_MODERATE_INTENSITY_STATIN_MEDICATIONS"),
+            prescribed == true
+        ),
+        earliestMedication($m)
+    )
+    accumulate(
+        $m: Medication(
+            startsDuring($program.measurementPeriod),
+            withValueSet("NcqaYear2019", "LOW_INTENSITY_STATIN_MEDICATIONS") ||
+            withValueSet("NcqaYear2019", "HIGH_AND_MODERATE_INTENSITY_STATIN_MEDICATIONS"),
+            prescribed == true
+        );
+        $totalDays: sum($m.totalDaysSupplied($program.measurementPeriodEndDate));
+        (double)$totalDays / ChronoUnit.DAYS.between($earliestMedication.startDate, $program.measurementPeriod.end) >= 0.8
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Spd2', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Spd2.Gap.performance_not_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Spd2')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Spd2', MeasureStatusValue.GAP, "performance_not_met");
+end

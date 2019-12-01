@@ -1,0 +1,166 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import accumulate com.ablehealth.functions.LatestClinicalActivityWithDatetimeAccumulateFunction latestClinicalActivityWithDatetime;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Cms69v7.Denominator'
+when
+    $program: Program(rules contains 'measure.Cms.2019.Cms69v7')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        endsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "BMI_ENCOUNTER_CODE_SET")
+    )
+    $patient: Patient(getAgeInYearsAt($encounter.startDate) >= 18)
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Cms69v7'));
+end
+
+rule 'Year2019.Cms69v7.Exclusion.exclusion_not_eligible'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms69v7')
+    (
+        exists ClinicalActivity(
+            startsOnOrBefore($encounter.stopDate),
+            withValueSet("VsacYear2019", "PALLIATIVE_CARE_ENCOUNTER")
+        ) or exists Order(
+            $encounter.stopDatetime != null && startsOnOrBefore($encounter.stopDatetime),
+            withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+        ) or exists Diagnosis(
+            overlaps($program.measurementPeriod),
+            withValueSet("VsacYear2019", "PREGNANCY")
+        ) or exists ClinicalActivity(
+            startsDuringDatetime($encounter),
+            withValueSet("VsacYear2019", "BMI_LOINC_VALUE"),
+            withChildValueSet("VsacYear2019", "PATIENT_REASON_REFUSED")
+        )
+    )
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms69v7', MeasureStatusValue.EXCLUSION, "exclusion_not_eligible");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms69v7', MeasureStatusValue.EXCLUSION, "exclusion_not_eligible");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms69v7', MeasureStatusValue.EXCLUSION, "exclusion_not_eligible");
+end
+
+rule 'Year2019.Cms69v7.Success.performance_met_normal'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms69v7')
+    exists ClinicalActivity(resultAsDecimal >= 18.5 && resultAsDecimal <= 25) from accumulate (
+        $c: ClinicalActivity(
+            startsDuring($encounter.startDate.minusMonths(12), $encounter.stopDate),
+            resultAsDecimal != null,
+            withValueSet("VsacYear2019", "BMI_LOINC_VALUE")
+        ),
+        latestClinicalActivityWithDatetime($c)
+    )
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms69v7', MeasureStatusValue.SUCCESS, "performance_met_normal");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms69v7', MeasureStatusValue.SUCCESS, "performance_met_normal");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms69v7', MeasureStatusValue.SUCCESS, "performance_met_normal");
+end
+
+rule 'Year2019.Cms69v7.Success.performance_met_above'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms69v7')
+    (
+        exists Order(
+            $encounter.stopDatetime != null && startsDuringDatetime($encounter.stopDatetime.minusMonths(12), $encounter.stopDatetime),
+            withValueSet("VsacYear2019", "ABOVE_NORMAL_FOLLOW_UP")
+        ) or exists ClinicalActivity(
+            $encounter.stopDatetime != null && startsDuringDatetime($encounter.stopDatetime.minusMonths(12), $encounter.stopDatetime),
+            withValueSet("VsacYear2019", "ABOVE_NORMAL_FOLLOW_UP")
+        ) or exists ClinicalActivity(
+            $encounter.stopDatetime != null && startsDuringDatetime($encounter.stopDatetime.minusMonths(12), $encounter.stopDatetime),
+            withValueSet("VsacYear2019", "REFERRALS_WHERE_WEIGHT_ASSESSMENT_MAY_OCCUR"),
+            withChildValueSet("VsacYear2019", "OVERWEIGHT_OR_OBESE")
+        ) or exists Medication(
+            $encounter.stopDatetime != null && startsDuringDatetime($encounter.stopDatetime.minusMonths(12), $encounter.stopDatetime),
+            withValueSet("VsacYear2019", "ABOVE_NORMAL_MEDICATIONS"),
+            codeType == 'RXNORM'
+        )
+    ) and exists ClinicalActivity(resultAsDecimal >= 25) from accumulate (
+        $c: ClinicalActivity(
+            $encounter.stopDatetime != null && startsDuringDatetime($encounter.stopDatetime.minusMonths(12), $encounter.stopDatetime),
+            resultAsDecimal != null,
+            withValueSet("VsacYear2019", "BMI_LOINC_VALUE")
+        ),
+        latestClinicalActivityWithDatetime($c)
+    )
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms69v7', MeasureStatusValue.SUCCESS, "performance_met_above");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms69v7', MeasureStatusValue.SUCCESS, "performance_met_above");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms69v7', MeasureStatusValue.SUCCESS, "performance_met_above");
+end
+
+rule 'Year2019.Cms69v7.Success.performance_met_below'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms69v7')
+    (
+        (
+            exists Order(
+                $encounter.stopDatetime != null && startsDuringDatetime($encounter.stopDatetime.minusMonths(12), $encounter.stopDatetime),
+                withValueSet("VsacYear2019", "BELOW_NORMAL_FOLLOW_UP")
+            ) or exists ClinicalActivity(
+                $encounter.stopDatetime != null && startsDuringDatetime($encounter.stopDatetime.minusMonths(12), $encounter.stopDatetime),
+                withValueSet("VsacYear2019", "BELOW_NORMAL_FOLLOW_UP")
+            ) or exists ClinicalActivity(
+                $encounter.stopDatetime != null && startsDuringDatetime($encounter.stopDatetime.minusMonths(12), $encounter.stopDatetime),
+                withValueSet("VsacYear2019", "REFERRALS_WHERE_WEIGHT_ASSESSMENT_MAY_OCCUR"),
+                withChildValueSet("VsacYear2019", "UNDERWEIGHT")
+            ) or exists Medication(
+                $encounter.stopDatetime != null && startsDuringDatetime($encounter.stopDatetime.minusMonths(12), $encounter.stopDatetime),
+                withValueSet("VsacYear2019", "BELOW_NORMAL_MEDICATIONS"),
+                codeType == 'RXNORM'
+            )
+        ) and exists ClinicalActivity(resultAsDecimal <= 18.5) from accumulate (
+            $c: ClinicalActivity(
+                $encounter.stopDatetime != null && startsDuringDatetime($encounter.stopDatetime.minusMonths(12), $encounter.stopDatetime),
+                resultAsDecimal != null,
+                withValueSet("VsacYear2019", "BMI_LOINC_VALUE")
+            ),
+            latestClinicalActivityWithDatetime($c)
+        )
+    )
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms69v7', MeasureStatusValue.SUCCESS, "performance_met_below");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms69v7', MeasureStatusValue.SUCCESS, "performance_met_below");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms69v7', MeasureStatusValue.SUCCESS, "performance_met_below");
+end
+
+rule 'Year2019.Cms69v7.Exception.exception_1'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms69v7')
+    exists ClinicalActivity(
+        startsDuring($encounter.startDate.minusMonths(12), $encounter.startDate),
+        withValueSet("VsacYear2019", "BMI_LOINC_VALUE") ||
+        withValueSet("VsacYear2019", "ABOVE_NORMAL_MEDICATIONS") ||
+        withValueSet("VsacYear2019", "ABOVE_NORMAL_FOLLOW_UP") ||
+        withValueSet("VsacYear2019", "BELOW_NORMAL_MEDICATIONS") ||
+        withValueSet("VsacYear2019", "BELOW_NORMAL_FOLLOW_UP") ||
+        withValueSet("VsacYear2019", "REFERRALS_WHERE_WEIGHT_ASSESSMENT_MAY_OCCUR"),
+        withChildValueSet("VsacYear2019", "MEDICAL_OR_OTHER_REASON_NOT_DONE")
+    )
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms69v7', MeasureStatusValue.EXCEPTION, "exception_1");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms69v7', MeasureStatusValue.EXCEPTION, "exception_1");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms69v7', MeasureStatusValue.EXCEPTION, "exception_1");
+end
+
+rule 'Year2019.Cms69v7.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms69v7')
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms69v7', MeasureStatusValue.GAP, "performance_not_met");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms69v7', MeasureStatusValue.GAP, "performance_not_met");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms69v7', MeasureStatusValue.GAP, "performance_not_met");
+end

@@ -1,0 +1,103 @@
+package com.ablehealth;
+
+import com.ablehealth.model.Patient;
+import com.ablehealth.payloads.Program;
+
+global com.ablehealth.results.PatientResults controlSet;
+
+declare Demographic
+    age: int
+    sex: String
+end
+
+rule 'Infer Ages'
+when
+    Program($period: riskCodingPeriod, rules contains 'risk.cms_hcc')
+    $p: Patient(sex == 'male' || sex == 'female')
+then
+    insert(new Demographic($p.getAgeInYearsAtStartOfMeasurementPeriod($period), $p.getSex()));
+end
+
+rule '0 - 34'
+when
+	Demographic($sex: sex, age <= 34)
+then
+	controlSet.addVariable("demographics." + $sex.toUpperCase() + "_0_34");
+end
+
+rule '35 - 44'
+when
+	Demographic($sex: sex, age >= 35, age <= 44)
+then
+	controlSet.addVariable("demographics." + $sex.toUpperCase() + "_35_44");
+end
+
+rule '45 - 54'
+when
+	Demographic($sex: sex, age >= 45, age <= 54)
+then
+	controlSet.addVariable("demographics." + $sex.toUpperCase() + "_45_54");
+end
+
+rule '55 - 59'
+when
+	Demographic($sex: sex, age >= 55, age <= 59)
+then
+	controlSet.addVariable("demographics." + $sex.toUpperCase() + '_55_59');
+end
+
+rule '60 - 64'
+when
+	Demographic($sex: sex, age >= 60, age <= 64)
+then
+	controlSet.addVariable("demographics." + $sex.toUpperCase() + '_60_64');
+end
+
+rule '65 - 69'
+when
+	Demographic($sex: sex, age >= 65, age <= 69)
+then
+	controlSet.addVariable("demographics." + $sex.toUpperCase() + '_65_69');
+end
+
+rule '70 - 74'
+when
+	Demographic($sex: sex, age >= 70, age <= 74)
+then
+	controlSet.addVariable("demographics." + $sex.toUpperCase() + '_70_74');
+end
+
+rule '75 - 79'
+when
+	Demographic($sex: sex, age >= 75, age <= 79)
+then
+	controlSet.addVariable("demographics." + $sex.toUpperCase() + '_75_79');
+end
+
+rule '80 - 84'
+when
+	Demographic($sex: sex, age >= 80, age <= 84)
+then
+	controlSet.addVariable("demographics." + $sex.toUpperCase() + '_80_84');
+end
+
+rule '85 - 89'
+when
+	Demographic($sex: sex, age >= 85, age <= 89)
+then
+	controlSet.addVariable("demographics." + $sex.toUpperCase() + '_85_89');
+end
+
+rule '90 - 94'
+when
+	Demographic($sex: sex, age >= 90, age <= 94)
+then
+	controlSet.addVariable("demographics." + $sex.toUpperCase() + '_90_94');
+end
+
+rule '95+'
+when
+	Demographic($sex: sex, age >= 95)
+then
+	controlSet.addVariable("demographics." + $sex.toUpperCase() + '_95');
+end

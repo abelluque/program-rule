@@ -1,0 +1,120 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+declare Copd
+	encounter: ClinicalActivity
+end
+
+declare FirstCopdDuringIndexingPeriod
+	encounter: ClinicalActivity
+end
+
+rule 'Year2019.Spr.Copd'
+when
+	$program: Program(rules contains 'measure.Hedis.2019.Spr')
+	$encounter: ClinicalActivity(
+		startsDuring(
+			$program.measurementPeriod.end.plusDays(1).minusMonths(48),
+			$program.measurementPeriod.end
+		),
+		withValueSet("HedisYear2019", "OUTPATIENT") ||
+		withValueSet("HedisYear2019", "OBSERVATION") ||
+		withValueSet("HedisYear2019", "ED") ||
+		withValueSet("HedisYear2019", "INPATIENT_STAY")
+	)
+	and (
+		exists (
+			Diagnosis(
+				startsDuring($encounter),
+				withValueSet("HedisYear2019", "COPD") ||
+				withValueSet("HedisYear2019", "EMPHYSEMA") ||
+				withValueSet("HedisYear2019", "CHRONIC_BRONCHITIS")
+			)
+		)
+	)
+	and not (
+		ClinicalActivity(
+			startsDuring($encounter),
+			withValueSet("HedisYear2019", "NONACUTE_INPATIENT")
+		)
+	)
+then
+	insert(new Copd($encounter));
+end
+
+rule 'Year2019.Spr.FirstCopdDuringIndexingPeriod'
+when
+	$program: Program(rules contains 'measure.Hedis.2019.Spr')
+	$firstCopd: ClinicalActivity() from accumulate (
+		Copd(
+			$copd: encounter,
+			$copd.startsDuring(
+				$program.measurementPeriod.end.plusDays(1).minusMonths(18),
+				$program.measurementPeriod.end.minusMonths(6)
+			)
+		),
+		earliestClinicalActivity($copd)
+	)
+then
+	insert(new FirstCopdDuringIndexingPeriod($firstCopd));
+end
+
+rule 'Year2019.Spr.Denominator'
+when
+	$program: Program(rules contains 'measure.Hedis.2019.Spr')
+	$patient: Patient(
+		getAgeInYearsAt($program.measurementPeriod.end) >= 40
+	)
+	and exists(
+		Copd(
+			$copd1: encounter,
+			$copd1.startsDuring(
+				$program.measurementPeriod.end.plusDays(1).minusMonths(18),
+				$program.measurementPeriod.end.minusMonths(6)
+			)
+		)
+		and not (
+			FirstCopdDuringIndexingPeriod($firstCopd: encounter)
+			and Copd(
+				$copd: encounter,
+				$firstCopd.startsAfter($copd.startDate) &&
+				$firstCopd.startsOnOrBefore($copd.startDate.plusDays(730))
+			)
+		)
+	)
+	and not (
+		ClinicalActivity(
+			startsDuring($program.measurementPeriod),
+			withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+			withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+		)
+	)
+then
+	insert(new PatientDenominator($program, $patient, 'Year2019.Spr'));
+end
+
+rule 'Year2019.Spr.Success.performance_met'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Spr')
+	and exists (
+		FirstCopdDuringIndexingPeriod($firstCopd: encounter)
+		and exists ClinicalActivity(
+			startsDuring($firstCopd.startDate.minusMonths(24),$firstCopd.startDate.plusMonths(6)),
+			withValueSet("HedisYear2019", "SPIROMETRY")
+		)
+	)
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Spr', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Spr.Gap.performance_not_met'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Spr')
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Spr', MeasureStatusValue.GAP, "performance_not_met");
+end

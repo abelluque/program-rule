@@ -1,0 +1,71 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips039.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips039')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_039_ENCOUNTER")
+    )
+    Patient(
+        isFemale(),
+        getAgeInYearsAt($encounter.startDate) >= 65 &&
+        getAgeInYearsAt($encounter.startDate) <= 84
+    )
+    and not Diagnosis(
+        overlaps($encounter),
+        withValueSet("MipsYear2019", "OSTEOPOROSIS")
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips039'));
+end
+
+rule 'Year2019.Mips039.Exclusion.exclusion_1'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips039')
+    $patient: Patient()
+    and (
+        exists ClinicalActivity(
+            startsOnOrBefore($program.measurementPeriod.end),
+            startsDuring($encounter),
+            withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE")
+        )
+        or exists ClinicalActivity(
+            startsOnOrBefore($program.measurementPeriod.end),
+            overlaps($encounter),
+            withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips039', MeasureStatusValue.EXCLUSION, "exclusion_1");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Mips039', MeasureStatusValue.EXCLUSION, "exclusion_1");
+end
+
+rule 'Year2019.Mips039.Success.G8399'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips039')
+    $patient: Patient()
+    and exists ClinicalActivity(
+        startsOnOrBefore($program.measurementPeriod.end),
+        withValueSet("MipsYear2019", "PERFORMANCE_MET_G8399") ||
+        withValueSet("AbleYear2019", "AXIAL_DUAL_ENERGY_X_RAY_ABSORPTIOMETRY_DXA")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips039', MeasureStatusValue.SUCCESS, "G8399");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Mips039', MeasureStatusValue.SUCCESS, "G8399");
+end
+
+rule 'Year2019.Mips039.Gap.G8400'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips039')
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips039', MeasureStatusValue.GAP, "G8400");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Mips039', MeasureStatusValue.GAP, "G8400");
+end

@@ -1,0 +1,943 @@
+package com.ablehealth.measures.hedis.year2019;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+import java.time.LocalDate;
+
+global PatientResults controlSet;
+
+declare HedisYear2019CisDtapActivity
+    startDate: LocalDate
+end
+
+declare HedisYear2019CisIpvActivity
+    startDate: LocalDate
+end
+
+declare HedisYear2019CisHibActivity
+    startDate: LocalDate
+end
+
+declare HedisYear2019CisHepbActivity
+    startDate: LocalDate
+end
+
+declare HedisYear2019CisPcvActivity
+    startDate: LocalDate
+end
+
+declare HedisYear2019CisRv2Activity
+    startDate: LocalDate
+end
+
+declare HedisYear2019CisRv3Activity
+    startDate: LocalDate
+end
+
+declare HedisYear2019CisInfluenzaActivity
+    startDate: LocalDate
+end
+
+declare HedisYear2019CisMmrVzvInfluenzaDiagnosis
+end
+
+declare HedisYear2019Cis1SuccessPerformanceMet
+end
+
+declare HedisYear2019Cis2SuccessPerformanceMet
+end
+
+declare HedisYear2019Cis3SuccessPerformanceMet
+end
+
+declare HedisYear2019Cis4SuccessPerformanceMet
+end
+
+declare HedisYear2019Cis5SuccessPerformanceMet
+end
+
+declare HedisYear2019Cis6SuccessPerformanceMet
+end
+
+declare HedisYear2019Cis7SuccessPerformanceMet
+end
+
+declare HedisYear2019Cis8SuccessPerformanceMet
+end
+
+declare HedisYear2019Cis9SuccessPerformanceMet
+end
+
+declare HedisYear2019Cis10SuccessPerformanceMet
+end
+
+declare HedisYear2019Cis14SuccessPerformanceMet
+end
+
+rule "Year2019.Hedis.Cis.DtapActivities.Procedures"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: ClinicalActivity(
+        withValueSet("HedisYear2019", "DTAP_VACCINE_ADMINISTERED") ||
+        withValueSet("AbleYear2019", "DTAP_VACCINE"),
+        startsDuring($patient.dateOfBirth.plusDays(42), $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisDtapActivity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.DtapActivities.Medications"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: Medication(
+        withValueSet("HedisYear2019", "DTAP_VACCINE_ADMINISTERED"),
+        startsDuring($patient.dateOfBirth.plusDays(42), $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisDtapActivity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.IpvActivities.Procedures"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: ClinicalActivity(
+        withValueSet("HedisYear2019", "INACTIVATED_POLIO_VACCINE_IPV_ADMINISTERED"),
+        startsDuring($patient.dateOfBirth.plusDays(42), $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisIpvActivity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.IpvActivities.Medications"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: Medication(
+        withValueSet("HedisYear2019", "INACTIVATED_POLIO_VACCINE_IPV_ADMINISTERED"),
+        startsDuring($patient.dateOfBirth.plusDays(42), $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisIpvActivity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.HibActivities.Procedures"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: ClinicalActivity(
+        withValueSet("HedisYear2019", "HAEMOPHILUS_INFLUENZAE_TYPE_B_HIB_VACCINE_ADMINISTERED"),
+        startsDuring($patient.dateOfBirth.plusDays(42), $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisHibActivity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.HibActivities.Medications"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: Medication(
+        withValueSet("HedisYear2019", "HAEMOPHILUS_INFLUENZAE_TYPE_B_HIB_VACCINE_ADMINISTERED"),
+        startsDuring($patient.dateOfBirth.plusDays(42), $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisHibActivity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.HepbActivities.Procedures"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: ClinicalActivity(
+        withValueSet("HedisYear2019", "HEPATITIS_B_VACCINE_ADMINISTERED"),
+        startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisHepbActivity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.HepbActivities.Medications"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: Medication(
+        withValueSet("HedisYear2019", "HEPATITIS_B_VACCINE_ADMINISTERED"),
+        startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisHepbActivity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.PcvActivities.Procedures"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: ClinicalActivity(
+        withValueSet("HedisYear2019", "PNEUMOCOCCAL_CONJUGATE_VACCINE_ADMINISTERED"),
+        startsDuring($patient.dateOfBirth.plusDays(42), $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisPcvActivity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.PcvActivities.Medications"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: Medication(
+        withValueSet("HedisYear2019", "PNEUMOCOCCAL_CONJUGATE_VACCINE_ADMINISTERED"),
+        startsDuring($patient.dateOfBirth.plusDays(42), $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisPcvActivity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.Rv2Activities.Procedures"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: ClinicalActivity(
+        withValueSet("HedisYear2019", "ROTAVIRUS_VACCINE_2_DOSE_SCHEDULE_ADMINISTERED"),
+        startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisRv2Activity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.Rv2Activities.Medications"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: Medication(
+        withValueSet("HedisYear2019", "ROTAVIRUS_VACCINE_2_DOSE_SCHEDULE_ADMINISTERED"),
+        startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisRv2Activity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.Rv3Activities.Procedures"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: ClinicalActivity(
+        withValueSet("HedisYear2019", "ROTAVIRUS_VACCINE_3_DOSE_SCHEDULE_ADMINISTERED"),
+        startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisRv3Activity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.Rv3Activities.Medications"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: Medication(
+        withValueSet("HedisYear2019", "ROTAVIRUS_VACCINE_3_DOSE_SCHEDULE_ADMINISTERED"),
+        startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisRv3Activity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.InlfuenzaActivities.Procedures"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: ClinicalActivity(
+        withValueSet("HedisYear2019", "INFLUENZA_VACCINE_ADMINISTERED"),
+        startsDuring($patient.dateOfBirth.plusDays(180), $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisInfluenzaActivity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.InfluenzaActivities.Medications"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    $record: Medication(
+        withValueSet("HedisYear2019", "INFLUENZA_VACCINE_ADMINISTERED"),
+        startsDuring($patient.dateOfBirth.plusDays(180), $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisInfluenzaActivity($record.startDate));
+end
+
+rule "Year2019.Hedis.Cis.MmrVzvInfluenzaDiagnoses"
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    and exists Diagnosis(
+        withValueSet("HedisYear2019", "DISORDERS_OF_THE_IMMUNE_SYSTEM") ||
+        withValueSet("HedisYear2019", "HIV") ||
+        withValueSet("HedisYear2019", "HIV_TYPE_2") ||
+        withValueSet("HedisYear2019", "MALIGNANT_NEOPLASM_OF_LYMPHATIC_TISSUE"),
+        startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+    )
+then
+    insert(new HedisYear2019CisMmrVzvInfluenzaDiagnosis());
+end
+
+rule 'Year2019.Hedis.Cis.HedisYear2019Cis1SuccessPerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cis1')
+    java.util.Set(size >= 4) from accumulate (
+        HedisYear2019CisDtapActivity($start: startDate);
+        collectSet($start.toString())
+    )
+then
+    insert(new HedisYear2019Cis1SuccessPerformanceMet());
+end
+
+rule 'Year2019.Hedis.Cis.HedisYear2019Cis2SuccessPerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cis2')
+    java.util.Set(size >= 3) from accumulate (
+        HedisYear2019CisIpvActivity($start: startDate);
+        collectSet($start.toString())
+    )
+then
+    insert(new HedisYear2019Cis2SuccessPerformanceMet());
+end
+
+rule 'Year2019.Hedis.Cis.HedisYear2019Cis3SuccessPerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cis3')
+    (
+        exists ClinicalActivity(
+            withValueSet("HedisYear2019", "MEASLES_MUMPS_AND_RUBELLA_MMR_VACCINE_ADMINISTERED"),
+            startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+        )
+        or exists Medication(
+            withValueSet("HedisYear2019", "MEASLES_MUMPS_AND_RUBELLA_MMR_VACCINE_ADMINISTERED"),
+            startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+        )
+        or (
+            (
+                exists ClinicalActivity(
+                    withValueSet("HedisYear2019", "MEASLES_RUBELLA_VACCINE_ADMINISTERED"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+                or exists Medication(
+                    withValueSet("HedisYear2019", "MEASLES_RUBELLA_VACCINE_ADMINISTERED"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+            )
+            and (
+                exists ClinicalActivity(
+                    withValueSet("HedisYear2019", "MUMPS_VACCINE_ADMINISTERED"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+                or exists Medication(
+                    withValueSet("HedisYear2019", "MUMPS_VACCINE_ADMINISTERED"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+                or exists Diagnosis(
+                    withValueSet("HedisYear2019", "MUMPS"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+            )
+        )
+        or (
+            (
+                exists ClinicalActivity(
+                    withValueSet("HedisYear2019", "MEASLES_VACCINE_ADMINISTERED"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+                or exists Medication(
+                    withValueSet("HedisYear2019", "MEASLES_VACCINE_ADMINISTERED"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+                or exists Diagnosis(
+                    withValueSet("HedisYear2019", "MEASLES"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+            )
+            and (
+                exists ClinicalActivity(
+                    withValueSet("HedisYear2019", "MUMPS_VACCINE_ADMINISTERED"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+                or exists Medication(
+                    withValueSet("HedisYear2019", "MUMPS_VACCINE_ADMINISTERED"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+                or exists Diagnosis(
+                    withValueSet("HedisYear2019", "MUMPS"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+            )
+            and (
+                exists ClinicalActivity(
+                    withValueSet("HedisYear2019", "RUBELLA_VACCINE_ADMINISTERED"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+                or exists Medication(
+                    withValueSet("HedisYear2019", "RUBELLA_VACCINE_ADMINISTERED"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+                or exists Diagnosis(
+                    withValueSet("HedisYear2019", "RUBELLA"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+            )
+        )
+    )
+then
+    insert(new HedisYear2019Cis3SuccessPerformanceMet());
+end
+
+rule 'Year2019.Hedis.Cis.HedisYear2019Cis4SuccessPerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cis4')
+    java.util.Set(size >= 3) from accumulate (
+        HedisYear2019CisHibActivity($start: startDate);
+        collectSet($start.toString())
+    )
+then
+    insert(new HedisYear2019Cis4SuccessPerformanceMet());
+end
+
+rule 'Year2019.Hedis.Cis.HedisYear2019Cis5SuccessPerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cis5')
+    (
+        (
+            java.util.Set(size >= 3) from accumulate (
+                HedisYear2019CisHepbActivity($start: startDate);
+                collectSet($start.toString())
+            )
+        )
+        or (
+            (
+                java.util.Set(size >= 2) from accumulate (
+                    HedisYear2019CisHepbActivity($start: startDate);
+                    collectSet($start.toString())
+                )
+            )
+            and exists ClinicalActivity(
+                withValueSet("HedisYear2019", "NEWBORN_HEPATITIS_B_VACCINE_ADMINISTERED"),
+                startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusDays(7))
+            )
+        )
+        or exists Diagnosis(
+            withValueSet("HedisYear2019", "HEPATITIS_B"),
+            startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+        )
+    )
+then
+    insert(new HedisYear2019Cis5SuccessPerformanceMet());
+end
+
+rule 'Year2019.Hedis.Cis.HedisYear2019Cis6SuccessPerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cis6')
+    (
+        exists ClinicalActivity(
+            withValueSet("HedisYear2019", "VARICELLA_ZOSTER_VZV_VACCINE_ADMINISTERED"),
+            startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+        )
+        or exists Medication(
+            withValueSet("HedisYear2019", "VARICELLA_ZOSTER_VZV_VACCINE_ADMINISTERED"),
+            startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+        )
+        or exists Diagnosis(
+            withValueSet("HedisYear2019", "VARICELLA_ZOSTER"),
+            startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+        )
+    )
+then
+    insert(new HedisYear2019Cis6SuccessPerformanceMet());
+end
+
+rule 'Year2019.Hedis.Cis.HedisYear2019Cis7SuccessPerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cis7')
+    java.util.Set(size >= 4) from accumulate (
+        HedisYear2019CisPcvActivity($start: startDate);
+        collectSet($start.toString())
+    )
+then
+    insert(new HedisYear2019Cis7SuccessPerformanceMet());
+end
+
+rule 'Year2019.Hedis.Cis.HedisYear2019Cis8SuccessPerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cis8')
+    (
+        exists ClinicalActivity(
+            withValueSet("HedisYear2019", "HEPATITIS_A_VACCINE_ADMINISTERED"),
+            startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+        )
+        or exists Medication(
+            withValueSet("HedisYear2019", "HEPATITIS_A_VACCINE_ADMINISTERED"),
+            startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+        )
+        or exists Diagnosis(
+            withValueSet("HedisYear2019", "HEPATITIS_A"),
+            startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+        )
+    )
+then
+    insert(new HedisYear2019Cis8SuccessPerformanceMet());
+end
+
+rule 'Year2019.Hedis.Cis.HedisYear2019Cis9SuccessPerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cis9')
+    (
+        (
+            java.util.Set(size >= 2) from accumulate (
+                HedisYear2019CisRv2Activity($start: startDate);
+                collectSet($start.toString())
+            )
+        )
+        or (
+            java.util.Set(size >= 3) from accumulate (
+                HedisYear2019CisRv3Activity($start: startDate);
+                collectSet($start.toString())
+            )
+        )
+        or (
+            (
+                java.util.Set(size >= 2) from accumulate (
+                    HedisYear2019CisRv3Activity($start: startDate);
+                    collectSet($start.toString())
+                )
+            )
+            and exists HedisYear2019CisRv2Activity()
+        )
+    )
+then
+    insert(new HedisYear2019Cis9SuccessPerformanceMet());
+end
+
+rule 'Year2019.Hedis.Cis.HedisYear2019Cis10SuccessPerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cis10')
+    java.util.Set(size >= 2) from accumulate (
+        HedisYear2019CisInfluenzaActivity($start: startDate);
+        collectSet($start.toString())
+    )
+then
+    insert(new HedisYear2019Cis10SuccessPerformanceMet());
+end
+
+rule 'Year2019.Hedis.Cis.HedisYear2019Cis14SuccessPerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cis14')
+    (
+        HedisYear2019Cis1SuccessPerformanceMet() &&
+        HedisYear2019Cis2SuccessPerformanceMet() &&
+        HedisYear2019Cis3SuccessPerformanceMet() &&
+        HedisYear2019Cis4SuccessPerformanceMet() &&
+        HedisYear2019Cis5SuccessPerformanceMet() &&
+        HedisYear2019Cis6SuccessPerformanceMet() &&
+        HedisYear2019Cis7SuccessPerformanceMet() &&
+        HedisYear2019Cis9SuccessPerformanceMet()
+    )
+then
+    insert(new HedisYear2019Cis14SuccessPerformanceMet());
+end
+
+rule 'Year2019.Cis.Denominator'
+when
+    $program: Program(
+      rules contains 'measure.Hedis.2019.Cis1' ||
+      rules contains 'measure.Hedis.2019.Cis2' ||
+      rules contains 'measure.Hedis.2019.Cis3' ||
+      rules contains 'measure.Hedis.2019.Cis4' ||
+      rules contains 'measure.Hedis.2019.Cis5' ||
+      rules contains 'measure.Hedis.2019.Cis6' ||
+      rules contains 'measure.Hedis.2019.Cis7' ||
+      rules contains 'measure.Hedis.2019.Cis8' ||
+      rules contains 'measure.Hedis.2019.Cis9' ||
+      rules contains 'measure.Hedis.2019.Cis10' ||
+      rules contains 'measure.Hedis.2019.Cis14'
+    )
+    $patient: Patient(getAgeInYearsAt($program.measurementPeriod.end) == 2)
+    not ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+        withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+    )
+then
+    insert(new PatientDenominator($program, $patient, 'Year2019.Cis1'));
+    insert(new PatientDenominator($program, $patient, 'Year2019.Cis2'));
+    insert(new PatientDenominator($program, $patient, 'Year2019.Cis3'));
+    insert(new PatientDenominator($program, $patient, 'Year2019.Cis4'));
+    insert(new PatientDenominator($program, $patient, 'Year2019.Cis5'));
+    insert(new PatientDenominator($program, $patient, 'Year2019.Cis6'));
+    insert(new PatientDenominator($program, $patient, 'Year2019.Cis7'));
+    insert(new PatientDenominator($program, $patient, 'Year2019.Cis8'));
+    insert(new PatientDenominator($program, $patient, 'Year2019.Cis9'));
+    insert(new PatientDenominator($program, $patient, 'Year2019.Cis10'));
+    insert(new PatientDenominator($program, $patient, 'Year2019.Cis14'));
+end
+
+rule 'Year2019.Cis.Exclusion.exclusion_1'
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Cis1' ||
+      measure == 'Year2019.Cis2' ||
+      measure == 'Year2019.Cis3' ||
+      measure == 'Year2019.Cis4' ||
+      measure == 'Year2019.Cis5' ||
+      measure == 'Year2019.Cis6' ||
+      measure == 'Year2019.Cis7' ||
+      measure == 'Year2019.Cis8' ||
+      measure == 'Year2019.Cis9' ||
+      measure == 'Year2019.Cis10' ||
+      measure == 'Year2019.Cis14'
+    )
+    (
+        (
+            exists Diagnosis(
+                withValueSet("HedisYear2019", "ANAPHYLACTIC_REACTION_DUE_TO_VACCINATION"),
+                startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+            )
+            and not (
+                HedisYear2019Cis1SuccessPerformanceMet() &&
+                HedisYear2019Cis2SuccessPerformanceMet() &&
+                HedisYear2019Cis3SuccessPerformanceMet() &&
+                HedisYear2019Cis4SuccessPerformanceMet() &&
+                HedisYear2019Cis5SuccessPerformanceMet() &&
+                HedisYear2019Cis6SuccessPerformanceMet() &&
+                HedisYear2019Cis7SuccessPerformanceMet() &&
+                HedisYear2019Cis8SuccessPerformanceMet() &&
+                HedisYear2019Cis9SuccessPerformanceMet() &&
+                HedisYear2019Cis10SuccessPerformanceMet()
+            )
+        )
+        or (
+            (
+                exists (
+                    $encephalopathyDiagnosis: Diagnosis(
+                        withValueSet("HedisYear2019", "ENCEPHALOPATHY_DUE_TO_VACCINATION"),
+                        startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                    )
+                    and exists Diagnosis(
+                        withValueSet("HedisYear2019", "VACCINE_CAUSING_ADVERSE_EFFECT"),
+                        startDate.equals($encephalopathyDiagnosis.startDate)
+                    )
+                )
+                or exists Allergy(
+                    withValueSet("HedisYear2019", "DTAP_VACCINE_ADMINISTERED"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+            )
+            and not (HedisYear2019Cis1SuccessPerformanceMet())
+        )
+        or (
+            (
+                exists HedisYear2019CisMmrVzvInfluenzaDiagnosis()
+                or exists Allergy(
+                    withValueSet("HedisYear2019", "INFLUENZA_VACCINE_ADMINISTERED") ||
+                    withValueSet("AbleYear2019", "NEOMYCIN_INGREDIENT"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+            )
+            and not (HedisYear2019Cis10SuccessPerformanceMet())
+        )
+        or (
+            (
+                exists HedisYear2019CisMmrVzvInfluenzaDiagnosis()
+                or exists Allergy(
+                    withValueSet("HedisYear2019", "MEASLES_MUMPS_AND_RUBELLA_MMR_VACCINE_ADMINISTERED") ||
+                    withValueSet("HedisYear2019", "MEASLES_RUBELLA_VACCINE_ADMINISTERED") ||
+                    withValueSet("HedisYear2019", "MEASLES_VACCINE_ADMINISTERED") ||
+                    withValueSet("HedisYear2019", "MUMPS_VACCINE_ADMINISTERED") ||
+                    withValueSet("HedisYear2019", "RUBELLA_VACCINE_ADMINISTERED") ||
+                    withValueSet("AbleYear2019", "NEOMYCIN_INGREDIENT"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+            )
+            and not (HedisYear2019Cis3SuccessPerformanceMet())
+        )
+        or (
+            (
+                exists HedisYear2019CisMmrVzvInfluenzaDiagnosis()
+                or exists Allergy(
+                    withValueSet("HedisYear2019", "VARICELLA_ZOSTER_VZV_VACCINE_ADMINISTERED") ||
+                    withValueSet("AbleYear2019", "NEOMYCIN_INGREDIENT"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+            )
+            and not (HedisYear2019Cis6SuccessPerformanceMet())
+        )
+        or (
+            (
+                exists Diagnosis(
+                    withValueSet("HedisYear2019", "SEVERE_COMBINED_IMMUNODEFICIENCY") ||
+                    withValueSet("HedisYear2019", "INTUSSUSCEPTION"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+                or exists Allergy(
+                    withValueSet("HedisYear2019", "ROTAVIRUS_VACCINE_3_DOSE_SCHEDULE_ADMINISTERED") ||
+                    withValueSet("HedisYear2019", "ROTAVIRUS_VACCINE_2_DOSE_SCHEDULE_ADMINISTERED"),
+                    startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+                )
+            )
+            and not (HedisYear2019Cis9SuccessPerformanceMet())
+        )
+        or (
+            exists Allergy(
+                withValueSet("AbleYear2019", "NEOMYCIN_INGREDIENT") ||
+                withValueSet("AbleYear2019", "STREPTOMYCIN_INGREDIENT") ||
+                withValueSet("AbleYear2019", "POLYMYXIN_B_INGREDIENT") ||
+                withValueSet("HedisYear2019", "INACTIVATED_POLIO_VACCINE_IPV_ADMINISTERED"),
+                startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+            )
+            and not (HedisYear2019Cis2SuccessPerformanceMet())
+        )
+        or (
+            exists Allergy(
+                withValueSet("AbleYear2019", "BAKER_S_YEAST") ||
+                withValueSet("HedisYear2019", "HEPATITIS_B_VACCINE_ADMINISTERED") ||
+                withValueSet("HedisYear2019", "NEWBORN_HEPATITIS_B_VACCINE_ADMINISTERED"),
+                startsDuring($patient.dateOfBirth, $patient.dateOfBirth.plusYears(2))
+            )
+            and not (HedisYear2019Cis5SuccessPerformanceMet())
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cis1',  MeasureStatusValue.EXCLUSION, "exclusion_1");
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cis2',  MeasureStatusValue.EXCLUSION, "exclusion_1");
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cis3',  MeasureStatusValue.EXCLUSION, "exclusion_1");
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cis4',  MeasureStatusValue.EXCLUSION, "exclusion_1");
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cis5',  MeasureStatusValue.EXCLUSION, "exclusion_1");
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cis6',  MeasureStatusValue.EXCLUSION, "exclusion_1");
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cis7',  MeasureStatusValue.EXCLUSION, "exclusion_1");
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cis8',  MeasureStatusValue.EXCLUSION, "exclusion_1");
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cis9',  MeasureStatusValue.EXCLUSION, "exclusion_1");
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cis10', MeasureStatusValue.EXCLUSION, "exclusion_1");
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cis14', MeasureStatusValue.EXCLUSION, "exclusion_1");
+end

@@ -1,0 +1,91 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Cms155v7Rate3.Denominator'
+when
+    $program: Program(rules contains 'measure.Cms.2019.Cms155v7Rate3')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        endsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "OFFICE_VISIT") ||
+        withValueSet("VsacYear2019", "PREVENTIVE_CARE_SERVICES___GROUP_COUNSELING") ||
+        withValueSet("VsacYear2019", "PREVENTIVE_CARE_ESTABLISHED_OFFICE_VISIT_0_TO_17") ||
+        withValueSet("VsacYear2019", "PREVENTIVE_CARE_SERVICES_INITIAL_OFFICE_VISIT_0_TO_17") ||
+        withValueSet("VsacYear2019", "PREVENTIVE_CARE_SERVICES_INDIVIDUAL_COUNSELING") ||
+        withValueSet("VsacYear2019", "HOME_HEALTHCARE_SERVICES")
+    )
+    exists Patient(
+        getAgeInYearsAt($program.measurementPeriod.start) >= 3 &&
+        getAgeInYearsAt($program.measurementPeriod.start) < 17
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Cms155v7Rate3'));
+end
+
+rule 'Year2019.Cms155v7Rate3.Exclusion.exclusion_pregnancy'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms155v7Rate3')
+    $patient: Patient()
+    exists Diagnosis(
+        overlaps($program.measurementPeriod),
+        withValueSet("VsacYear2019", "PREGNANCY")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms155v7Rate3', MeasureStatusValue.EXCLUSION, "exclusion_pregnancy");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms155v7Rate3', MeasureStatusValue.EXCLUSION, "exclusion_pregnancy");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms155v7Rate3', MeasureStatusValue.EXCLUSION, "exclusion_pregnancy");
+end
+
+rule 'Year2019.Cms155v7Rate3.Exclusion.exclusion_hospice'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms155v7Rate3')
+    $patient: Patient()
+    (
+        exists ClinicalActivity(
+            endsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "ENCOUNTER_INPATIENT"),
+            withChildValueSet("VsacYear2019", "DISCHARGED_TO_HEALTH_CARE_FACILITY_FOR_HOSPICE_CARE") ||
+            withChildValueSet("VsacYear2019", "DISCHARGED_TO_HOME_FOR_HOSPICE_CARE")
+        )
+        or exists Order(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "HOSPICE_CARE_AMBULATORY")
+        ) or exists ClinicalActivity(
+            overlaps($program.measurementPeriod),
+            withValueSet("VsacYear2019", "HOSPICE_CARE_AMBULATORY")
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms155v7Rate3', MeasureStatusValue.EXCLUSION, "exclusion_hospice");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms155v7Rate3', MeasureStatusValue.EXCLUSION, "exclusion_hospice");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms155v7Rate3', MeasureStatusValue.EXCLUSION, "exclusion_hospice");
+end
+
+rule 'Year2019.Cms155v7Rate3.Success.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms155v7Rate3')
+    $patient: Patient()
+    exists ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "COUNSELING_FOR_PHYSICAL_ACTIVITY")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms155v7Rate3', MeasureStatusValue.SUCCESS, "performance_met");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms155v7Rate3', MeasureStatusValue.SUCCESS, "performance_met");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms155v7Rate3', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Cms155v7Rate3.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms155v7Rate3')
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms155v7Rate3', MeasureStatusValue.GAP, "performance_not_met");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms155v7Rate3', MeasureStatusValue.GAP, "performance_not_met");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms155v7Rate3', MeasureStatusValue.GAP, "performance_not_met");
+end

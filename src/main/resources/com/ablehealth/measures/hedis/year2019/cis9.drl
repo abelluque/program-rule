@@ -1,0 +1,22 @@
+package com.ablehealth.measures.hedis.year2019;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Cis9.Success.performance_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cis9')
+    HedisYear2019Cis9SuccessPerformanceMet()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cis9', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Cis9.Gap.performance_not_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cis9')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cis9', MeasureStatusValue.GAP, "performance_not_met");
+end

@@ -1,0 +1,100 @@
+package com.ablehealth.measures.mips.year2019;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips333.Denominator'
+when
+	$program: Program(rules contains 'measure.Mips.2019.Mips333')
+	$encounter: ClinicalActivity(
+		startsDuring(
+			$program.measurementPeriod.start,
+			$program.measurementPeriod.end.minusDays(28)
+		),
+		placeOfService != '02',
+		codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+		withValueSet("MipsYear2019", "MIPS_333_ENCOUNTER")
+	)
+	$patient: Patient(
+		getAgeInYearsAt($encounter.startDate) >= 18
+	)
+	and exists Diagnosis(
+		startsDuring($encounter),
+		withValueSet("MipsYear2019", "ACUTE_SINUSITIS")
+	)
+then
+	insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips333'));
+end
+
+rule 'Year2019.Mips333.Success.G9349'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips333')
+	and exists (
+		ClinicalActivity(
+			startsDuring($encounter.startDate, $encounter.startDate.plusDays(28)),
+			withValueSet("MipsYear2019", "PERFORMANCE_MET_G9349") ||
+			withValueSet("AbleYear2019", "CT_SCAN_OF_PARANASAL_SINUSES")
+		)
+	)
+	and not (
+		exists (
+			ClinicalActivity(
+				startsDuring($encounter.startDate, $encounter.startDate.plusDays(28)),
+				withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G9348")
+			)
+		)
+		or exists (
+			Diagnosis(
+				overlaps($encounter),
+				withValueSet("AbleYear2019", "CHRONIC_SINUSITIS") ||
+				withValueSet("AbleYear2019", "ACUTE_FRONTAL_OR_SPHENOID_SINUSITIS") ||
+				withValueSet("AbleYear2019", "PERIORBITAL_CELLULITIS") ||
+				withValueSet("AbleYear2019", "IMMUNODEFICIENT_CONDITIONS")
+			)
+		)
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips333', MeasureStatusValue.SUCCESS, "G9349");
+end
+
+rule 'Year2019.Mips333.Exception.G9348'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips333')
+	and exists (
+		ClinicalActivity(
+			startsDuring($encounter.startDate, $encounter.startDate.plusDays(28)),
+			withValueSet("MipsYear2019", "PERFORMANCE_MET_G9349") ||
+			withValueSet("AbleYear2019", "CT_SCAN_OF_PARANASAL_SINUSES")
+		)
+	)
+	and (
+		exists (
+			ClinicalActivity(
+				startsDuring($encounter.startDate, $encounter.startDate.plusDays(28)),
+				withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G9348")
+			)
+		)
+		or exists (
+			Diagnosis(
+				overlaps($encounter),
+				withValueSet("AbleYear2019", "CHRONIC_SINUSITIS") ||
+				withValueSet("AbleYear2019", "ACUTE_FRONTAL_OR_SPHENOID_SINUSITIS") ||
+				withValueSet("AbleYear2019", "PERIORBITAL_CELLULITIS") ||
+				withValueSet("AbleYear2019", "IMMUNODEFICIENT_CONDITIONS")
+			)
+		)
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips333', MeasureStatusValue.EXCEPTION, "G9348");
+end
+
+rule 'Year2019.Mips333.Gap.G9350'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips333')
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips333', MeasureStatusValue.GAP, "G9350");
+end
+

@@ -1,0 +1,63 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips138.Success.5050F'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, $measure:measure,
+		measure == 'Year2019.Mips138Rate2' ||
+		measure == 'Year2019.Mips138Rate3'
+	)
+	exists ClinicalActivity(
+		startsDuring($encounter),
+		codeModifiers.isEmpty(),
+		withValueSet("MipsYear2019", "PERFORMANCE_MET_5050F")
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter,$measure , MeasureStatusValue.SUCCESS, "5050F");
+end
+
+rule 'Year2019.Mips138.Exception.5050F-2P'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, $measure: measure ,
+		measure == 'Year2019.Mips138Rate2' ||
+		measure == 'Year2019.Mips138Rate3'
+	)
+	exists ClinicalActivity(
+		startsDuring($encounter),
+		hasModifier("2P"),
+		withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_5050F_2P")
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, $measure, MeasureStatusValue.EXCEPTION, "5050F-2P");
+end
+
+rule 'Year2019.Mips138.Exception.5050F-3P'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, $measure: measure,
+		measure == 'Year2019.Mips138Rate2' ||
+		measure == 'Year2019.Mips138Rate3'
+	)
+	$patient: Patient()
+	exists ClinicalActivity(
+		startsDuring($encounter),
+		hasModifier("3P"),
+		withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_5050F_3P")
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, $measure , MeasureStatusValue.EXCEPTION, "5050F-3P");
+end
+
+rule 'Year2019.Mips138Rate2.Gap.5050F-8P'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, $measure: measure,
+		measure == 'Year2019.Mips138Rate2' ||
+		measure == 'Year2019.Mips138Rate3'
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter,  $measure, MeasureStatusValue.GAP, "5050F-8P");
+end

@@ -1,0 +1,106 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips146.Denominator'
+when
+	$program: Program(rules contains 'measure.Mips.2019.Mips146')
+	$patient: Patient()
+	$encounter: ClinicalActivity(
+		startsDuring($program.measurementPeriod),
+		withValueSet("MipsYear2019", "MIPS_146_PROCEDURE")
+	)
+	and exists Diagnosis(
+		startsDuring($encounter),
+		withValueSet("MipsYear2019", "MAMMOGRAM")
+	)
+then
+	insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips146'));
+end
+
+rule 'Year2019.Mips146.Success.3343F'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips146')
+	exists ClinicalActivity(
+		startsDuring($encounter),
+		withValueSet("MipsYear2019", "PERFORMANCE_MET_3343F")
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips146', MeasureStatusValue.SUCCESS, "3343F");
+end
+
+rule 'Year2019.Mips146.Gap.3340F'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips146')
+	exists ClinicalActivity(
+		startsDuring($encounter),
+		codeModifiers.isEmpty(),
+		withValueSet("MipsYear2019", "PERFORMANCE_NOT_MET_3340F")
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips146', MeasureStatusValue.GAP, "3340F");
+end
+
+rule 'Year2019.Mips146.Gap.3341F'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips146')
+	exists ClinicalActivity(
+		startsDuring($encounter),
+		codeModifiers.isEmpty(),
+		withValueSet("MipsYear2019", "PERFORMANCE_NOT_MET_3341F")
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips146', MeasureStatusValue.GAP, "3341F");
+end
+
+rule 'Year2019.Mips146.Gap.3342F'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips146')
+	exists ClinicalActivity(
+		startsDuring($encounter),
+		codeModifiers.isEmpty(),
+		withValueSet("MipsYear2019", "PERFORMANCE_NOT_MET_3342F")
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips146', MeasureStatusValue.GAP, "3342F");
+end
+
+rule 'Year2019.Mips146.Gap.3344F'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips146')
+	exists ClinicalActivity(
+		startsDuring($encounter),
+		codeModifiers.isEmpty(),
+		withValueSet("MipsYear2019", "PERFORMANCE_NOT_MET_3344F")
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips146', MeasureStatusValue.GAP, "3344F");
+end
+
+rule 'Year2019.Mips146.Gap.3345F'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips146')
+	exists ClinicalActivity(
+		startsDuring($encounter),
+		codeModifiers.isEmpty(),
+		withValueSet("MipsYear2019", "PERFORMANCE_NOT_MET_3345F")
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips146', MeasureStatusValue.GAP, "3345F");
+end
+
+rule 'Year2019.Mips146.Gap.3350F'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips146')
+	exists ClinicalActivity(
+		startsDuring($encounter),
+		codeModifiers.isEmpty(),
+		withValueSet("MipsYear2019", "PERFORMANCE_NOT_MET_3350F")
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips146', MeasureStatusValue.GAP, "3350F");
+end

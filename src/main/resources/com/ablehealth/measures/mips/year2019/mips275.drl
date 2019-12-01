@@ -1,0 +1,138 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips275.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips275')
+    $patient: Patient()
+    $encounter: ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2019", "MIPS_275_ENCOUNTER")
+    )
+    exists Diagnosis(
+      overlaps($encounter),
+      withValueSet("MipsYear2019", "INFLAMMATORY_BOWEL_DISEASE")
+    )
+    (
+      exists ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_275_ANTI_TNF_AGENT")
+      )
+      or exists Medication(
+        startsDuring($program.measurementPeriod),
+        withValueSet("AbleYear2019", "ANTI_TNF_AGENT")
+      )
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips275'));
+end
+
+rule 'Year2019.Mips275.Success.G9912'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips275')
+    $patient: Patient()
+    (
+      exists ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "PERFORMANCE_MET_G9912")
+      )
+      or (
+        (
+          $earliestAntiTNFProcedure: ClinicalActivity() from accumulate (
+            $c: ClinicalActivity(
+              startsDuring($program.measurementPeriod),
+              withValueSet("MipsYear2019", "MIPS_275_ANTI_TNF_AGENT")
+            ),
+            earliestClinicalActivity($c)
+          )
+          and (
+            exists ClinicalActivity(
+              startsOnOrBefore($earliestAntiTNFProcedure.startDate),
+              withValueSet("VsacYear2019", "HBSAG")
+            )
+            or exists LaboratoryTestPerformed(
+              startsOnOrBefore($earliestAntiTNFProcedure.startDate),
+              withValueSet("VsacYear2019", "HBSAG") ||
+              withValueSet("VsacYear2019", "HEPATITIS_B_ANTIBODY")
+            )
+          )
+        )
+        or (
+          $earliestAntiTNFMedication: Medication() from accumulate (
+            $c: Medication(
+              startsDuring($program.measurementPeriod),
+              withValueSet("AbleYear2019", "ANTI_TNF_AGENT")
+            ),
+            earliestMedication($c)
+          )
+          and (
+            exists ClinicalActivity(
+              startsOnOrBefore($earliestAntiTNFMedication.startDate),
+              withValueSet("VsacYear2019", "HBSAG")
+            )
+            or exists LaboratoryTestPerformed(
+              startsOnOrBefore($earliestAntiTNFMedication.startDate),
+              withValueSet("VsacYear2019", "HBSAG") ||
+              withValueSet("VsacYear2019", "HEPATITIS_B_ANTIBODY")
+            )
+          )
+        )
+      )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips275', MeasureStatusValue.SUCCESS, "G9912");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Mips275', MeasureStatusValue.SUCCESS, "G9912");
+end
+
+rule 'Year2019.Mips275.Success.G8869'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips275')
+    $patient: Patient()
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2019", "PERFORMANCE_MET_G8869")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips275', MeasureStatusValue.SUCCESS, "G8869");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Mips275', MeasureStatusValue.SUCCESS, "G8869");
+end
+
+rule 'Year2019.Mips275.Exception.G9504'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips275')
+    $patient: Patient()
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G9504")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips275', MeasureStatusValue.EXCEPTION, "G9504");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Mips275', MeasureStatusValue.EXCEPTION, "G9504");
+end
+
+rule 'Year2019.Mips275.Gap.G9913'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips275')
+    $patient: Patient()
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2019", "PERFORMANCE_NOT_MET_G9913")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips275', MeasureStatusValue.GAP, "G9913");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Mips275', MeasureStatusValue.GAP, "G9913");
+end
+
+rule 'Year2019.Mips275.Gap.G9915'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips275')
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips275', MeasureStatusValue.GAP, "G9915");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Mips275', MeasureStatusValue.GAP, "G9915");
+end

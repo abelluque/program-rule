@@ -1,0 +1,71 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips044.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips044')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_044_CABG")
+    )
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "MIPS_044_ANESTHESIA")
+    )
+    $patient: Patient(getAgeInYearsAt($encounter.startDate) >= 18)
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips044'));
+end
+
+rule 'Year2019.Mips044.Success.Mips4115F'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips044')
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusDays(1),$encounter.startDate),
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_4115F"),
+            codeModifiers.isEmpty
+        )
+        or exists Medication(
+            startsDuring($encounter.startDate.minusDays(1),$encounter.startDate),
+            withValueSet("VsacYear2019", "BETA_BLOCKER_THERAPY")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips044', MeasureStatusValue.SUCCESS, "4115F");
+end
+
+rule 'Year2019.Mips044.Exception.Mips4115F-1P'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips044')
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusDays(1),$encounter.startDate),
+            withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_4115F_1P"),
+            codeModifiers contains '1P'
+        )
+        or exists Allergy(
+            overlaps($encounter),
+            withValueSet("VsacYear2019", "BETA_BLOCKER_THERAPY_INGREDIENT")
+        )
+        or exists Diagnosis(
+            overlaps($encounter),
+            withValueSet("VsacYear2019", "ALLERGY_TO_BETA_BLOCKER_THERAPY") || withValueSet("VsacYear2019", "INTOLERANCE_TO_BETA_BLOCKER_THERAPY")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips044', MeasureStatusValue.EXCEPTION, "4115F-1P");
+end
+
+rule 'Year2019.Mips044.Gaps.Mips4115F-8P'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips044')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips044', MeasureStatusValue.GAP, "4115F-8P");
+end
+

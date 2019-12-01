@@ -1,0 +1,22 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Hedis.UopRate1.SuccessReasons.PerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.UopRate1')
+    Year2019UopFourProviders()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.UopRate1', MeasureStatusValue.SUCCESS, 'performance_met');
+end
+
+rule 'Year2019.Hedis.UopRate1.GapReasons.PerformanceNotMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.UopRate1')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.UopRate1', MeasureStatusValue.GAP, 'performance_not_met');
+end

@@ -1,0 +1,315 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import java.util.Collection;
+
+global PatientResults controlSet;
+global Collection<Holiday> holidays;
+
+rule 'Year2019.Mipspipea1.Denominator'
+when
+    $program: Program(rules contains 'measure.Pi.2019.Mipspipea1')
+    $encounter: Encounter(startsDuring($program.piMeasurementPeriod))
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mipspipea1'));
+end
+
+rule 'Year2019.Mipspipea1.Success.Org.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: encounter, measure == 'Year2019.Mipspipea1')
+    $patient: Patient()
+    (
+        // At least one valid provisioning event exists
+        $provisioning: SystemEvent(
+            eventType == "HEALTH_INFORMATION_PROVISIONING",
+            startsDuring($program.piMeasurementPeriod),
+            endsDuring($program.piMeasurementPeriod),
+            endsOnOrBefore(startPlusBusinessDays(4, holidays)),
+            encounterExternalId == $encounter.externalId
+        )
+        and
+        exists SystemEvent(
+            eventType == "PORTAL_ACCESS",
+            startsOnOrBefore($program.piMeasurementPeriod.end),
+            $provisioning.endsDuring(startDate, stopDate) || (
+                startsOnOrBefore($provisioning.startPlusBusinessDays(4, holidays)) &&
+                (stopDate == null || endsOnOrAfter($provisioning.startPlusBusinessDays(4, holidays)))
+            )
+        )
+        and exists SystemEvent(
+            eventType == "API_ACCESS_OPT_IN" ||
+            eventType == "API_ACCESS_OPT_OUT",
+            startsOnOrBefore($program.piMeasurementPeriod.end),
+            $provisioning.endsDuring(startDate, stopDate) || (
+                startsOnOrBefore($provisioning.startPlusBusinessDays(4, holidays)) &&
+                (stopDate == null || endsOnOrAfter($provisioning.startPlusBusinessDays(4, holidays)))
+            )
+        )
+    )
+    not(
+        // No encounter exists with...
+        $encounterInYear: Encounter(
+            startsDuring($program.piMeasurementPeriod)
+        )
+        and (
+            // ...no provisioning event
+            not SystemEvent(
+                eventType == "HEALTH_INFORMATION_PROVISIONING",
+                startsDuring($program.piMeasurementPeriod),
+                endsDuring($program.piMeasurementPeriod),
+                endsOnOrBefore(startPlusBusinessDays(4, holidays)),
+                encounterExternalId == $encounterInYear.externalId
+            )
+            // ...an invalid provisioning event
+            or exists SystemEvent(
+                eventType == "HEALTH_INFORMATION_PROVISIONING" &&
+                startsDuring($program.piMeasurementPeriod) &&
+                encounterExternalId == $encounterInYear.externalId &&
+                (
+                    stopDate == null ||
+                    (
+                        endsDuring($program.piMeasurementPeriod) &&
+                        endsAfter(startPlusBusinessDays(4, holidays))
+                    ) ||
+                    endsAfter($program.piMeasurementPeriod.end)
+                )
+            )
+            // ...or a valid provisioning event with no portal or API access
+            or (
+                $provisioningForAllEncounters: SystemEvent(
+                    eventType == "HEALTH_INFORMATION_PROVISIONING",
+                    startsDuring($program.piMeasurementPeriod),
+                    endsDuring($program.piMeasurementPeriod),
+                    endsOnOrBefore(startPlusBusinessDays(4, holidays)),
+                    encounterExternalId == $encounterInYear.externalId
+                )
+                and (
+                    not SystemEvent(
+                        eventType == "PORTAL_ACCESS",
+                        startsOnOrBefore($program.piMeasurementPeriod.end),
+                        $provisioningForAllEncounters.endsDuring(startDate, stopDate) || (
+                            startsOnOrBefore($provisioningForAllEncounters.startPlusBusinessDays(4, holidays)) &&
+                            (stopDate == null || endsOnOrAfter($provisioningForAllEncounters.startPlusBusinessDays(4, holidays)))
+                        )
+                    )
+                    or not SystemEvent(
+                        eventType == "API_ACCESS_OPT_IN" ||
+                        eventType == "API_ACCESS_OPT_OUT",
+                        startsOnOrBefore($program.piMeasurementPeriod.end),
+                        $provisioningForAllEncounters.endsDuring(startDate, stopDate) || (
+                            startsOnOrBefore($provisioningForAllEncounters.startPlusBusinessDays(4, holidays)) &&
+                            (stopDate == null || endsOnOrAfter($provisioningForAllEncounters.startPlusBusinessDays(4, holidays)))
+                        )
+                    )
+                )
+            )
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mipspipea1', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Mipspipea1.Success.Provider.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: encounter, measure == 'Year2019.Mipspipea1')
+    $patient: Patient()
+    (
+        // At least one valid provisioning event exists
+        $provisioning: SystemEvent(
+            eventType == "HEALTH_INFORMATION_PROVISIONING",
+            startsDuring($program.piMeasurementPeriod),
+            endsDuring($program.piMeasurementPeriod),
+            endsOnOrBefore(startPlusBusinessDays(4, holidays)),
+            encounterExternalId == $encounter.externalId
+        )
+        and
+        exists SystemEvent(
+            eventType == "PORTAL_ACCESS",
+            startsOnOrBefore($program.piMeasurementPeriod.end),
+            $provisioning.endsDuring(startDate, stopDate) || (
+                startsOnOrBefore($provisioning.startPlusBusinessDays(4, holidays)) &&
+                (stopDate == null || endsOnOrAfter($provisioning.startPlusBusinessDays(4, holidays)))
+            )
+        )
+        and exists SystemEvent(
+            eventType == "API_ACCESS_OPT_IN" ||
+            eventType == "API_ACCESS_OPT_OUT",
+            startsOnOrBefore($program.piMeasurementPeriod.end),
+            $provisioning.endsDuring(startDate, stopDate) || (
+                startsOnOrBefore($provisioning.startPlusBusinessDays(4, holidays)) &&
+                (stopDate == null || endsOnOrAfter($provisioning.startPlusBusinessDays(4, holidays)))
+            )
+        )
+    )
+    not(
+        // No encounter exists with...
+        $encounterInYear: Encounter(
+            startsDuring($program.piMeasurementPeriod),
+            providerExternalId == $encounter.providerExternalId
+        )
+        and (
+            // ...no provisioning event
+            not SystemEvent(
+                eventType == "HEALTH_INFORMATION_PROVISIONING",
+                startsDuring($program.piMeasurementPeriod),
+                endsDuring($program.piMeasurementPeriod),
+                endsOnOrBefore(startPlusBusinessDays(4, holidays)),
+                encounterExternalId == $encounterInYear.externalId
+            )
+            // ...an invalid provisioning event
+            or exists SystemEvent(
+                eventType == "HEALTH_INFORMATION_PROVISIONING" &&
+                startsDuring($program.piMeasurementPeriod) &&
+                encounterExternalId == $encounterInYear.externalId &&
+                (
+                    stopDate == null ||
+                    (
+                        endsDuring($program.piMeasurementPeriod) &&
+                        endsAfter(startPlusBusinessDays(4, holidays))
+                    ) ||
+                    endsAfter($program.piMeasurementPeriod.end)
+                )
+            )
+            // ...or a valid provisioning event with no portal or API access
+            or (
+                $provisioningForAllEncounters: SystemEvent(
+                    eventType == "HEALTH_INFORMATION_PROVISIONING",
+                    startsDuring($program.piMeasurementPeriod),
+                    endsDuring($program.piMeasurementPeriod),
+                    endsOnOrBefore(startPlusBusinessDays(4, holidays)),
+                    encounterExternalId == $encounterInYear.externalId
+                )
+                and (
+                    not SystemEvent(
+                        eventType == "PORTAL_ACCESS",
+                        startsOnOrBefore($program.piMeasurementPeriod.end),
+                        $provisioningForAllEncounters.endsDuring(startDate, stopDate) || (
+                            startsOnOrBefore($provisioningForAllEncounters.startPlusBusinessDays(4, holidays)) &&
+                            (stopDate == null || endsOnOrAfter($provisioningForAllEncounters.startPlusBusinessDays(4, holidays)))
+                        )
+                    )
+                    or not SystemEvent(
+                        eventType == "API_ACCESS_OPT_IN" ||
+                        eventType == "API_ACCESS_OPT_OUT",
+                        startsOnOrBefore($program.piMeasurementPeriod.end),
+                        $provisioningForAllEncounters.endsDuring(startDate, stopDate) || (
+                            startsOnOrBefore($provisioningForAllEncounters.startPlusBusinessDays(4, holidays)) &&
+                            (stopDate == null || endsOnOrAfter($provisioningForAllEncounters.startPlusBusinessDays(4, holidays)))
+                        )
+                    )
+                )
+            )
+        )
+    )
+then
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Mipspipea1', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Mipspipea1.Success.Group.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: encounter, measure == 'Year2019.Mipspipea1')
+    $patient: Patient()
+    (
+        // At least one valid provisioning event exists
+        $provisioning: SystemEvent(
+            eventType == "HEALTH_INFORMATION_PROVISIONING",
+            startsDuring($program.piMeasurementPeriod),
+            endsDuring($program.piMeasurementPeriod),
+            endsOnOrBefore(startPlusBusinessDays(4, holidays)),
+            encounterExternalId == $encounter.externalId
+        )
+        and
+        exists SystemEvent(
+            eventType == "PORTAL_ACCESS",
+            startsOnOrBefore($program.piMeasurementPeriod.end),
+            $provisioning.endsDuring(startDate, stopDate) || (
+                startsOnOrBefore($provisioning.startPlusBusinessDays(4, holidays)) &&
+                (stopDate == null || endsOnOrAfter($provisioning.startPlusBusinessDays(4, holidays)))
+            )
+        )
+        and exists SystemEvent(
+            eventType == "API_ACCESS_OPT_IN" ||
+            eventType == "API_ACCESS_OPT_OUT",
+            startsOnOrBefore($program.piMeasurementPeriod.end),
+            $provisioning.endsDuring(startDate, stopDate) || (
+                startsOnOrBefore($provisioning.startPlusBusinessDays(4, holidays)) &&
+                (stopDate == null || endsOnOrAfter($provisioning.startPlusBusinessDays(4, holidays)))
+            )
+        )
+    )
+    not(
+        // No encounter exists with...
+        $encounterInYear: Encounter(
+            startsDuring($program.piMeasurementPeriod),
+            groupExternalId == $encounter.groupExternalId
+        )
+        and (
+            // ...no provisioning event
+            not SystemEvent(
+                eventType == "HEALTH_INFORMATION_PROVISIONING",
+                startsDuring($program.piMeasurementPeriod),
+                endsDuring($program.piMeasurementPeriod),
+                endsOnOrBefore(startPlusBusinessDays(4, holidays)),
+                encounterExternalId == $encounterInYear.externalId
+            )
+            // ...an invalid provisioning event
+            or exists SystemEvent(
+                eventType == "HEALTH_INFORMATION_PROVISIONING" &&
+                startsDuring($program.piMeasurementPeriod) &&
+                encounterExternalId == $encounterInYear.externalId &&
+                (
+                    stopDate == null ||
+                    (
+                        endsDuring($program.piMeasurementPeriod) &&
+                        endsAfter(startPlusBusinessDays(4, holidays))
+                    ) ||
+                    endsAfter($program.piMeasurementPeriod.end)
+                )
+            )
+            // ...or a valid provisioning event with no portal or API access
+            or (
+                $provisioningForAllEncounters: SystemEvent(
+                    eventType == "HEALTH_INFORMATION_PROVISIONING",
+                    startsDuring($program.piMeasurementPeriod),
+                    endsDuring($program.piMeasurementPeriod),
+                    endsOnOrBefore(startPlusBusinessDays(4, holidays)),
+                    encounterExternalId == $encounterInYear.externalId
+                )
+                and (
+                    not SystemEvent(
+                        eventType == "PORTAL_ACCESS",
+                        startsOnOrBefore($program.piMeasurementPeriod.end),
+                        $provisioningForAllEncounters.endsDuring(startDate, stopDate) || (
+                            startsOnOrBefore($provisioningForAllEncounters.startPlusBusinessDays(4, holidays)) &&
+                            (stopDate == null || endsOnOrAfter($provisioningForAllEncounters.startPlusBusinessDays(4, holidays)))
+                        )
+                    )
+                    or not SystemEvent(
+                        eventType == "API_ACCESS_OPT_IN" ||
+                        eventType == "API_ACCESS_OPT_OUT",
+                        startsOnOrBefore($program.piMeasurementPeriod.end),
+                        $provisioningForAllEncounters.endsDuring(startDate, stopDate) || (
+                            startsOnOrBefore($provisioningForAllEncounters.startPlusBusinessDays(4, holidays)) &&
+                            (stopDate == null || endsOnOrAfter($provisioningForAllEncounters.startPlusBusinessDays(4, holidays)))
+                        )
+                    )
+                )
+            )
+        )
+    )
+then
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Mipspipea1', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Mipspipea1.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $encounter: encounter, measure == 'Year2019.Mipspipea1')
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mipspipea1', MeasureStatusValue.GAP, "performance_not_met");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Mipspipea1', MeasureStatusValue.GAP, "performance_not_met");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Mipspipea1', MeasureStatusValue.GAP, "performance_not_met");
+end

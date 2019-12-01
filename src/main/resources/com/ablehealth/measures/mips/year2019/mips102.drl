@@ -1,0 +1,134 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import accumulate com.ablehealth.functions.EarliestDiagnosisAccumulateFunction earliestDiagnosis;
+
+global PatientResults controlSet;
+
+declare Year2019Mips102EarliestDiagnosis
+    diagnosis: Diagnosis
+end
+
+rule 'Year2019.Mips102.EarliestDiagnosis'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips102')
+    $firstDiagnosis: Diagnosis() from accumulate (
+        $diagnosis: Diagnosis(
+            startsDuring($program.measurementPeriod),
+            withValueSet("MipsYear2019", "PROSTATE_CANCER")
+        ),
+        earliestDiagnosis($diagnosis)
+    )
+then
+    insert(new Year2019Mips102EarliestDiagnosis($firstDiagnosis));
+end
+
+rule 'Year2019.Mips102.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips102')
+    $patient: Patient(
+        isMale()
+    )
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_102_ENCOUNTER")
+    )
+    and (
+        exists ClinicalActivity(
+            startsAfter($program.measurementPeriod.start.minusDays(56)),
+            startsOnOrBefore($program.measurementPeriod.end),
+            withValueSet("MipsYear2019", "LOW_RISK_OF_RECURRENCE_OF_PROSTATE_CANCER") ||
+            withValueSet("AbleYear2019", "GLEASON_SCORE_BELOW_7")
+        )
+        or exists LaboratoryTestPerformed(
+            startsAfter($program.measurementPeriod.start.minusDays(56)),
+            startsOnOrBefore($program.measurementPeriod.end),
+            withValueSet("AbleYear2019", "PSA_SERUM_TEST"),
+            resultAsDecimal < 10
+        )
+    )
+    and exists Diagnosis(
+        startsDuring($encounter.startDate.minusDays(56), $encounter.startDate),
+        withValueSet("MipsYear2019", "PROSTATE_CANCER")
+    )
+    and not ClinicalActivity(
+        startsDuring($encounter.startDate.minusDays(56), $encounter.startDate.minusDays(1)),
+        withValueSet("MipsYear2019", "MIPS_102_ENCOUNTER")
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips102'));
+end
+
+rule 'Year2019.Mips102.Success.3270F'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips102')
+    Year2019Mips102EarliestDiagnosis($diagnosis: diagnosis)
+    $patient: Patient()
+    and not ClinicalActivity(
+        startsDuring($diagnosis.startDate, $encounter.startDate.plusDays(56)),
+        (
+            (
+                withValueSet("MipsYear2019", "PERFORMANCE_NOT_MET_3269F") &&
+                codeModifiers.isEmpty()
+            ) ||
+            (
+                withValueSet("VsacYear2019", "BONE_SCAN") ||
+                withValueSet("AbleYear2019", "BONE_HEALTH_ASSESSMENT")
+            )
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips102', MeasureStatusValue.SUCCESS, "3270F");
+end
+
+rule 'Year2019.Mips102.Exception.3269F-1P'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips102')
+    Year2019Mips102EarliestDiagnosis($diagnosis: diagnosis)
+    $patient: Patient()
+    (
+    and exists ClinicalActivity(
+        startsDuring($diagnosis.startDate, $encounter.startDate.plusDays(56)),
+        (
+            withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_3269F_1P") &&
+            codeModifiers contains '1P'
+        ) ||
+        (
+            withValueSet("VsacYear2019", "SALVAGE_THERAPY")
+        ) ||
+        (
+            (
+                withValueSet("VsacYear2019", "STANDARDIZED_PAIN_ASSESSMENT_TOOL") ||
+                withValueSet("AbleYear2019", "PAIN_ASSESSMENTS")
+            ) && resultAsDecimal > 0
+        )
+    )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips102', MeasureStatusValue.EXCEPTION, "3269F-1P");
+end
+
+rule 'Year2019.Mips102.Exception.3269F-3P'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips102')
+    Year2019Mips102EarliestDiagnosis($diagnosis: diagnosis)
+    $patient: Patient()
+    and exists ClinicalActivity(
+        startsDuring($diagnosis.startDate, $encounter.startDate.plusDays(56)),
+        withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_3269F_1P"),
+        codeModifiers contains '1P'
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips102', MeasureStatusValue.EXCEPTION, "3269F-3P");
+end
+
+rule 'Year2019.Mips102.Gap.3269F'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips102')
+    $patient: Patient()
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips102', MeasureStatusValue.GAP, "3269F");
+end

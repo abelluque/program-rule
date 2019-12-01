@@ -1,0 +1,148 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import accumulate com.ablehealth.functions.EarliestClinicalActivityAccumulateFunction earliestClinicalActivity;
+
+global PatientResults controlSet;
+
+declare HedisIet1Rate3AOD
+  encounter: ClinicalActivity
+end
+
+declare FirstHedisIet1Rate3AOD
+  encounter: ClinicalActivity
+end
+
+rule 'Year2018.Hedis.Iet1Rate3.AODInIndexPeriod'
+when
+  $program: Program(rules contains 'measure.Hedis.2018.Iet1Rate3')
+  $encounter: ClinicalActivity(
+    (startsDuring($program.measurementPeriod.start, $program.measurementPeriod.end.minusDays(46))) && (
+      (
+        withValueSet("HedisYear2018", "IET_STAND_ALONE_VISITS") || withValueSet("HedisYear2018", "DETOXIFICATION") || withValueSet("HedisYear2018", "ED") || withValueSet("HedisYear2018", "INPATIENT_STAY") || withValueSet("HedisYear2018", "TELEPHONE_VISITS") || withValueSet("HedisYear2018", "ONLINE_ASSESSMENTS")
+      ) || (
+        withValueSet("HedisYear2018", "IET_VISITS_GROUP_1") &&
+        placeOfService in ('02', '03', '05', '07', '09', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '22', '33', '49', '50', '52', '53', '57', '71', '72')
+      ) || (
+        withValueSet("HedisYear2018", "IET_VISITS_GROUP_2") &&
+        placeOfService in ('02', '52', '53')
+      )
+    )
+  )
+  exists Diagnosis(
+    startsDuring($encounter),
+    withValueSet("HedisYear2018", "OTHER_DRUG_ABUSE_AND_DEPENDENCE")
+  )
+then
+  insert(new HedisIet1Rate3AOD($encounter));
+end
+
+rule 'Year2018.Hedis.Iet1Rate3.FirstAODInIndexPeriod'
+when
+  $program: Program(rules contains 'measure.Hedis.2018.Iet1Rate3')
+
+  $aodEncounters: Object() from accumulate(
+    HedisIet1Rate3AOD($encounter: encounter);
+    collectList($encounter)
+  )
+
+  $earliestEncounter: ClinicalActivity() from accumulate (
+    $c: ClinicalActivity() from $aodEncounters,
+    earliestClinicalActivity($c)
+  )
+then
+  insert(new FirstHedisIet1Rate3AOD($earliestEncounter));
+end
+
+rule 'Year2018.Hedis.Iet1Rate3.Denominator'
+when
+  $program: Program(rules contains 'measure.Hedis.2018.Iet1Rate3')
+  $patient: Patient(getAgeInYearsAt($program.measurementPeriod.end) >= 13)
+  FirstHedisIet1Rate3AOD($encounter: encounter)
+  not Diagnosis(
+    startsDuring($encounter.startDate.minusDays(60),$encounter.startDate.minusDays(1)),
+    withValueSet("HedisYear2018", "AOD_ABUSE_AND_DEPENDENCE")
+  )
+  not ClinicalActivity(
+    startsDuring($encounter.startDate.minusDays(60),$encounter.startDate.minusDays(1)),
+    withValueSet("HedisYear2018", "MEDICATION_ASSISTED_TREATMENT")
+  )
+  not Medication(
+    startsDuring($encounter.startDate.minusDays(60),$encounter.startDate.minusDays(1)),
+    withValueSet("HedisYear2018", "MAT_FOR_ALCOHOL_ABUSE_OR_DEPENDENCE_MEDICATIONS") ||withValueSet("HedisYear2018", "MAT_FOR_OPIOID_ABUSE_OR_DEPENDENCE_MEDICATIONS")
+  )
+  not ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2018", "MIPS_HOSPICE_SERVICE") || withValueSet("VsacYear2018", "PALLIATIVE_CARE")
+  )
+then
+  insert(new EncounterDenominator($program, $encounter, 'Year2018.Iet1Rate3'));
+end
+
+rule 'Year2018.Hedis.Iet1Rate3.Success.performance_met'
+when
+  EncounterDenominator($encounter: clinicalActivity, $program: program, measure == 'Year2018.Iet1Rate3')
+  $patient: Patient()
+  (
+    exists ClinicalActivity(
+      startsDuring($encounter),
+      withValueSet("HedisYear2018", "INPATIENT_STAY")
+    )
+    or (
+      $subsequentEncounter: ClinicalActivity(
+        (startsDuring($encounter.startDate.plusDays(1),$encounter.startDate.plusDays(13))) && (
+          (
+            withValueSet("HedisYear2018", "IET_STAND_ALONE_VISITS") || withValueSet("HedisYear2018", "DETOXIFICATION") || withValueSet("HedisYear2018", "ED") || withValueSet("HedisYear2018", "INPATIENT_STAY") || withValueSet("HedisYear2018", "TELEPHONE_VISITS") || withValueSet("HedisYear2018", "ONLINE_ASSESSMENTS")
+          ) || (
+            withValueSet("HedisYear2018", "IET_VISITS_GROUP_1") &&
+            placeOfService in ('02', '03', '05', '07', '09', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '22', '33', '49', '50', '52', '53', '57', '71', '72')
+          ) || (
+            withValueSet("HedisYear2018", "IET_VISITS_GROUP_2") &&
+            placeOfService in ('02', '52', '53')
+          )
+        )
+      )
+      and exists Diagnosis(
+        startsDuring($subsequentEncounter),
+        withValueSet("HedisYear2018", "OTHER_DRUG_ABUSE_AND_DEPENDENCE")
+      )
+    )
+    or (
+      $sameDayEncounter: ClinicalActivity(
+        (
+          providerExternalId != $encounter.providerExternalId &&
+          providerExternalId != null &&
+          $encounter.providerExternalId != null &&
+          startsDuring($encounter)
+        ) && (
+          (
+            withValueSet("HedisYear2018", "IET_STAND_ALONE_VISITS") || withValueSet("HedisYear2018", "DETOXIFICATION") || withValueSet("HedisYear2018", "ED") || withValueSet("HedisYear2018", "INPATIENT_STAY") || withValueSet("HedisYear2018", "TELEPHONE_VISITS") || withValueSet("HedisYear2018", "ONLINE_ASSESSMENTS")
+          ) || (
+            withValueSet("HedisYear2018", "IET_VISITS_GROUP_1") &&
+            placeOfService in ('02', '03', '05', '07', '09', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '22', '33', '49', '50', '52', '53', '57', '71', '72')
+          ) || (
+            withValueSet("HedisYear2018", "IET_VISITS_GROUP_2") &&
+            placeOfService in ('02', '52', '53')
+          )
+        )
+      )
+      and exists Diagnosis(
+        startsDuring($sameDayEncounter),
+        withValueSet("HedisYear2018", "OTHER_DRUG_ABUSE_AND_DEPENDENCE")
+      )
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Iet1Rate3', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2018.Hedis.Iet1Rate3.Gap.performance_not_met'
+when
+  EncounterDenominator($encounter: clinicalActivity, $program: program, measure == 'Year2018.Iet1Rate3')
+  $patient: Patient()
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Iet1Rate3', MeasureStatusValue.GAP, "performance_not_met");
+end

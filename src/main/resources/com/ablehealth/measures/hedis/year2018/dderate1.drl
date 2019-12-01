@@ -1,0 +1,96 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+declare HedisDdeRate1Fracture
+    encounter: QdmDatatype
+end
+
+rule 'Year2018.Hedis.DdeRate1.Fall'
+when
+    $program: Program(rules contains 'measure.Hedis.2018.DdeRate1')
+    $encounter: Diagnosis(
+        startsDuring($program.measurementPeriod.end.minusMonths(24).plusDays(1),$program.measurementPeriod.end.minusMonths(1)),
+        withValueSet("HedisYear2018", "FALLS")
+    )
+then
+    insert(new HedisDdeRate1Fracture($encounter));
+end
+
+rule 'Year2018.Hedis.DdeRate1.FractureClinicalActivity'
+when
+    $program: Program(rules contains 'measure.Hedis.2018.DdeRate1')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod.end.minusMonths(24).plusDays(1),$program.measurementPeriod.end.minusMonths(1)),
+        withValueSet("HedisYear2018", "OUTPATIENT") || withValueSet("HedisYear2018", "OBSERVATION") || withValueSet("HedisYear2018", "ED") || withValueSet("HedisYear2018", "INPATIENT_STAY")
+    )
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("HedisYear2018", "HIP_FRACTURES")
+    )
+then
+    insert(new HedisDdeRate1Fracture($encounter));
+end
+
+rule 'Year2018.Hedis.DdeRate1.FractureDiagnosis'
+when
+    $program: Program(rules contains 'measure.Hedis.2018.DdeRate1')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod.end.minusMonths(24).plusDays(1),$program.measurementPeriod.end.minusMonths(1)),
+        withValueSet("HedisYear2018", "OUTPATIENT") || withValueSet("HedisYear2018", "OBSERVATION") || withValueSet("HedisYear2018", "ED") || withValueSet("HedisYear2018", "INPATIENT_STAY")
+    )
+    exists Diagnosis(
+        startsDuring($encounter),
+        withValueSet("HedisYear2018", "HIP_FRACTURES")
+    )
+then
+    insert(new HedisDdeRate1Fracture($encounter));
+end
+
+rule 'Year2018.Hedis.DdeRate1.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2018.DdeRate1')
+    $patient: Patient(getAgeInYearsAt($program.measurementPeriod.end) >= 67)
+    HedisDdeRate1Fracture($fracture: encounter)
+    not ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2018", "MIPS_HOSPICE_SERVICE") || withValueSet("VsacYear2018", "PALLIATIVE_CARE")
+    )
+then
+    insert(new PatientDenominator($program, $patient, 'Year2018.DdeRate1'));
+end
+
+rule 'Year2018.Hedis.DdeRate1.ExclusionReasons.Exclusion1'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2018.DdeRate1')
+    exists Diagnosis(
+        overlaps($program.measurementPeriod.end.minusMonths(24).plusDays(1),$program.measurementPeriod.end.minusMonths(1)),
+        withValueSet("HedisYear2018", "PSYCHOSIS") || withValueSet("HedisYear2018", "SCHIZOPHRENIA") || withValueSet("HedisYear2018", "BIPOLAR_DISORDER") || withValueSet("HedisYear2018", "OTHER_BIPOLAR_DISORDER") || withValueSet("HedisYear2018", "SEIZURE_DISORDERS")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.DdeRate1', MeasureStatusValue.EXCLUSION, 'exclusion_1');
+end
+
+rule 'Year2018.Hedis.DdeRate1.SuccessReasons.PerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2018.DdeRate1')
+    HedisDdeRate1Fracture($fracture: encounter)
+    exists Medication(
+        startsDuring($fracture.start,$program.measurementPeriod.end),
+        withValueSet("HedisYear2018", "POTENTIALLY_HARMFUL_DRUGS_RATE_1_MEDICATIONS") || withValueSet("HedisYear2018", "POTENTIALLY_HARMFUL_DRUGS_RATE_1_AND_RATE_2_MEDICATIONS"),
+        prescribed == true
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.DdeRate1', MeasureStatusValue.SUCCESS, 'performance_met');
+end
+
+rule 'Year2018.Hedis.DdeRate1.GapReasons.PerformanceNotMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2018.DdeRate1')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.DdeRate1', MeasureStatusValue.GAP, 'performance_not_met');
+end

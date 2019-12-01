@@ -1,0 +1,62 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips023.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips023')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_023_PROCEDURE")
+    )
+    $patient: Patient(
+        getAgeInYearsAt($encounter.startDate) >= 18
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips023'));
+end
+
+rule 'Year2019.Mips023.Success.4044F'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips023')
+    $patient: Patient()
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusDays(14), $encounter.startDate),
+            codeModifiers.isEmpty(),
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_4044F")
+        )
+        or exists Medication(
+            startsDuring($encounter.startDate.minusDays(14), $encounter.startDate),
+            withValueSet("AbleYear2019", "VTE_PROPHYLAXIS")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips023', MeasureStatusValue.SUCCESS, "4044F");
+end
+
+rule 'Year2019.Mips023.Exception.4044F-1P'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips023')
+    $patient: Patient()
+    exists ClinicalActivity(
+        startsDuring($encounter.startDate.minusDays(14), $encounter.startDate),
+        withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_4044F_1P"),
+        codeModifiers contains '1P'
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips023', MeasureStatusValue.EXCEPTION, "4044F-1P");
+end
+
+rule 'Year2019.Mips023.Gap.4044F-8P'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips023')
+    $patient: Patient()
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips023', MeasureStatusValue.GAP, "4044F-8P");
+end
+

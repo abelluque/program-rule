@@ -1,0 +1,285 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import accumulate com.ablehealth.functions.LatestClinicalActivityAccumulateFunction latestClinicalActivity;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips226Rate1.Denominator.TwoDenominatorEncounters.Org'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips226Rate1')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        placeOfService != '02',
+        codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+        withValueSet("MipsYear2019", "MIPS_226_ENCOUNTER")
+    )
+    accumulate(
+        ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            placeOfService != '02',
+            codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+            withValueSet("MipsYear2019", "MIPS_226_ENCOUNTER")
+        );
+        $count: count(1);
+        $count >= 2
+    )
+    $latestEncounter: ClinicalActivity() from accumulate (
+      $c: ClinicalActivity(
+          startsDuring($program.measurementPeriod),
+          placeOfService != '02',
+          codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+          withValueSet("MipsYear2019", "MIPS_226_ENCOUNTER")
+      ),
+      latestClinicalActivity($c)
+    )
+    Patient(getAgeInYearsAt($encounter.startDate) >= 18)
+then
+    insert(new EncounterDenominator($program, $latestEncounter, 'Year2019.Mips226Rate1'));
+end
+
+rule 'Year2019.Mips226Rate1.Denominator.TwoDenominatorEncounters.Provider'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips226Rate1')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        placeOfService != '02',
+        codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+        withValueSet("MipsYear2019", "MIPS_226_ENCOUNTER")
+    )
+    accumulate(
+        ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            placeOfService != '02',
+            codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+            withValueSet("MipsYear2019", "MIPS_226_ENCOUNTER"),
+            providerExternalId == $encounter.providerExternalId
+        );
+        $count: count(1);
+        $count >= 2
+    )
+    $latestEncounter: ClinicalActivity() from accumulate (
+      $c: ClinicalActivity(
+          startsDuring($program.measurementPeriod),
+          placeOfService != '02',
+          codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+          withValueSet("MipsYear2019", "MIPS_226_ENCOUNTER"),
+          providerExternalId == $encounter.providerExternalId
+      ),
+      latestClinicalActivity($c)
+    )
+    Patient(getAgeInYearsAt($encounter.startDate) >= 18)
+then
+    insert(new ProviderEncounterDenominator($program, $latestEncounter, 'Year2019.Mips226Rate1'));
+end
+
+rule 'Year2019.Mips226Rate1.Denominator.PreventiveEncounter'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips226Rate1')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        placeOfService != '02',
+        codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+        withValueSet("MipsYear2019", "MIPS_226_PREVENTIVE_ENCOUNTER")
+    )
+    $latestEncounter: ClinicalActivity() from accumulate (
+      $c: ClinicalActivity(
+          startsDuring($program.measurementPeriod),
+          placeOfService != '02',
+          codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+          withValueSet("MipsYear2019", "MIPS_226_PREVENTIVE_ENCOUNTER")
+      ),
+      latestClinicalActivity($c)
+    )
+    Patient(getAgeInYearsAt($encounter.startDate) >= 18)
+then
+    insert(new EncounterDenominator($program, $latestEncounter, 'Year2019.Mips226Rate1'));
+    insert(new ProviderEncounterDenominator($program, $latestEncounter, 'Year2019.Mips226Rate1'));
+end
+
+rule 'Year2019.Mips226Rate1.Success.G9902.Org'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips226Rate1')
+    $patient: Patient()
+    (
+        exists Diagnosis(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("VsacYear2019", "TOBACCO_USER")
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_G9902") ||
+            withValueSet("VsacYear2019", "TOBACCO_USER")
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("AbleYear2019", "MEDCIN_SMOKER"),
+            result == 'Y'
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("AbleYear2019", "MEDCIN_NON_SMOKER"),
+            result == 'N'
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips226Rate1', MeasureStatusValue.SUCCESS, "G9902");
+end
+
+rule 'Year2019.Mips226Rate1.Success.G9902.Provider'
+when
+    ProviderEncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips226Rate1')
+    $patient: Patient()
+    (
+        exists Diagnosis(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("VsacYear2019", "TOBACCO_USER")
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_G9902") ||
+            withValueSet("VsacYear2019", "TOBACCO_USER")
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("AbleYear2019", "MEDCIN_SMOKER"),
+            result == 'Y'
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("AbleYear2019", "MEDCIN_NON_SMOKER"),
+            result == 'N'
+        )
+    )
+then
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Mips226Rate1', MeasureStatusValue.SUCCESS, "G9902");
+end
+
+rule 'Year2019.Mips226Rate1.Success.G9903.Org'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips226Rate1')
+    $patient: Patient()
+    (
+        exists Diagnosis(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("AbleYear2019", "TOBACCO_NON_USER")
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_G9903") ||
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_1036F") ||
+            withValueSet("VsacYear2019", "TOBACCO_NON_USER")
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("AbleYear2019", "MEDCIN_SMOKER"),
+            result == 'N'
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("AbleYear2019", "MEDCIN_NON_SMOKER"),
+            result == 'Y'
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips226Rate1', MeasureStatusValue.SUCCESS, "G9903");
+end
+
+rule 'Year2019.Mips226Rate1.Success.G9903.Provider'
+when
+    ProviderEncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips226Rate1')
+    $patient: Patient()
+    (
+        exists Diagnosis(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("AbleYear2019", "TOBACCO_NON_USER")
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_G9903") ||
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_1036F") ||
+            withValueSet("VsacYear2019", "TOBACCO_NON_USER")
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("AbleYear2019", "MEDCIN_SMOKER"),
+            result == 'N'
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusMonths(24), $encounter.startDate),
+            withValueSet("AbleYear2019", "MEDCIN_NON_SMOKER"),
+            result == 'Y'
+        )
+    )
+then
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Mips226Rate1', MeasureStatusValue.SUCCESS, "G9903");
+end
+
+rule 'Year2019.Mips226Rate1.Exception.G9904.Org'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips226Rate1')
+    $patient: Patient()
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G9904")
+        )
+        or (
+            exists Diagnosis(
+                overlaps($encounter),
+                withValueSet("VsacYear2019", "LIMITED_LIFE_EXPECTANCY")
+            ) ||
+            exists ClinicalActivity(
+                startsDuring($encounter),
+                withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+                withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+            )
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips226Rate1', MeasureStatusValue.EXCEPTION, "G9904");
+end
+
+rule 'Year2019.Mips226Rate1.Exception.G9904.Provider'
+when
+    ProviderEncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips226Rate1')
+    $patient: Patient()
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G9904")
+        )
+        or (
+            exists Diagnosis(
+                overlaps($encounter),
+                withValueSet("VsacYear2019", "LIMITED_LIFE_EXPECTANCY")
+            ) ||
+            exists ClinicalActivity(
+                startsDuring($encounter),
+                withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+                withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+            )
+        )
+    )
+then
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Mips226Rate1', MeasureStatusValue.EXCEPTION, "G9904");
+end
+
+rule 'Year2019.Mips226Rate1.Gap.G9905.Org'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips226Rate1')
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips226Rate1', MeasureStatusValue.GAP, 'G9905');
+end
+
+rule 'Year2019.Mips226Rate1.Gap.G9905.Provider'
+when
+    ProviderEncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips226Rate1')
+    $patient: Patient()
+then
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips226Rate1', MeasureStatusValue.GAP, 'G9905');
+end

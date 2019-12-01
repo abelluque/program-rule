@@ -1,0 +1,44 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mipsaqi63.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mipsaqi63')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_AQI63_ENCOUNTER")
+    )
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "NMB")
+    )
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "EXTUBATED_POST_OPERATIVELY")
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mipsaqi63'));
+end
+
+rule 'Year2019.Mipsaqi63.Success.Mips11A19'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mipsaqi63')
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "PERFORMANCE_MET_11A19")
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mipsaqi63', MeasureStatusValue.SUCCESS, "11A19");
+end
+
+rule 'Year2019.Mipsaqi63.Gaps.Mips11A20'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mipsaqi63')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mipsaqi63', MeasureStatusValue.GAP, "11A20");
+end

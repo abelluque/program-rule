@@ -1,0 +1,85 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2018.Mips334.Denominator'
+when
+  $program: Program(rules contains 'measure.Mips.2018.Mips334')
+  $encounter: ClinicalActivity(
+      startsDuring($program.measurementPeriod.start,$program.measurementPeriod.end.minusMonths(3)),
+      placeOfService != '02',
+      codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+      withValueSet("MipsYear2018", "MIPS_334_ENCOUNTER")
+  )
+  exists Diagnosis(
+      startsDuring($encounter),
+      withValueSet("MipsYear2018", "CHRONIC_SINUSITIS")
+  )
+  $patient: Patient(getAgeInYearsAt($encounter.startDate) >= 18)
+then
+  insert(new EncounterDenominator($program, $encounter, 'Year2018.Mips334'));
+end
+
+rule 'Year2018.Mips334.Success.G9352'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips334')
+  $patient: Patient()
+  not ClinicalActivity(
+    startsDuring($encounter.startDate,$encounter.startDate.plusDays(90)),
+    withValueSet("MipsYear2018", "DENOMINATOR_EXCEPTION_G9353")
+  )
+  (
+    exists ClinicalActivity(
+      startsDuring($encounter.startDate,$encounter.startDate.plusDays(90)),
+      withValueSet("MipsYear2018", "PERFORMANCE_MET_G9352")
+    )
+    or accumulate(
+      ClinicalActivity(
+        startsDuring($encounter.startDate,$encounter.startDate.plusDays(90)),
+        withValueSet("AbleYear2018", "CT_SCAN_OF_PARANASAL_SINUSES")
+      );
+      $encounterCount: count(1);
+      $encounterCount >= 2
+    )
+  )
+then
+  controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips334', MeasureStatusValue.SUCCESS, "G9352");
+end
+
+rule 'Year2018.Mips334.Exception.G9353'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips334')
+  $patient: Patient()
+  exists ClinicalActivity(
+    startsDuring($encounter.startDate,$encounter.startDate.plusDays(90)),
+    withValueSet("MipsYear2018", "DENOMINATOR_EXCEPTION_G9353")
+  )
+  (
+    exists ClinicalActivity(
+      startsDuring($encounter.startDate,$encounter.startDate.plusDays(90)),
+      withValueSet("MipsYear2018", "PERFORMANCE_MET_G9352")
+    )
+    or accumulate(
+      ClinicalActivity(
+        startsDuring($encounter.startDate,$encounter.startDate.plusDays(90)),
+        withValueSet("AbleYear2018", "CT_SCAN_OF_PARANASAL_SINUSES")
+      );
+      $encounterCount: count(1);
+      $encounterCount >= 2
+    )
+  )
+then
+  controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips334', MeasureStatusValue.EXCEPTION, "G9353");
+end
+
+rule 'Year2018.Mips334.Gap.G9354'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips334')
+  $patient: Patient()
+then
+  controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips334', MeasureStatusValue.GAP, "G9354");
+end

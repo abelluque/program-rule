@@ -1,0 +1,141 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Chl.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2019.Chl')
+    $patient: Patient(
+        getAgeInYearsAt($program.measurementPeriod.end) >= 16,
+        getAgeInYearsAt($program.measurementPeriod.end) <= 24,
+        sex == "female"
+    )
+    and (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("HedisYear2019", "PREGNANCY_TESTS") ||
+            withValueSet("HedisYear2019", "SEXUAL_ACTIVITY")
+        )
+     or exists Diagnosis(
+            overlaps($program.measurementPeriod),
+            withValueSet("HedisYear2019", "PREGNANCY") ||
+            withValueSet("HedisYear2019", "SEXUAL_ACTIVITY")
+        )
+     or exists LaboratoryTestPerformed(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "PREGNANCY_TEST") ||
+            withValueSet("VsacYear2019", "PAP_TEST") ||
+            withValueSet("VsacYear2019", "LAB_TESTS_FOR_SEXUALLY_TRANSMITTED_INFECTIONS") ||
+            withValueSet("VsacYear2019", "LAB_TESTS_DURING_PREGNANCY")
+        )
+     or exists Medication(
+            overlaps($program.measurementPeriod),
+            withValueSet("VsacYear2019", "CONTRACEPTIVE_MEDICATIONS")
+        )
+    )
+    and not ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+        withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+    )
+then
+    insert(new PatientDenominator($program, $patient, 'Year2019.Chl'));
+end
+
+rule 'Year2019.Chl.Exclusion.exclusion_1'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Chl')
+    and not (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("HedisYear2019", "SEXUAL_ACTIVITY")
+        )
+     or exists Diagnosis(
+            overlaps($program.measurementPeriod),
+            withValueSet("HedisYear2019", "PREGNANCY") ||
+            withValueSet("HedisYear2019", "SEXUAL_ACTIVITY")
+        )
+     or exists LaboratoryTestPerformed(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "PAP_TEST") ||
+            withValueSet("VsacYear2019", "LAB_TESTS_FOR_SEXUALLY_TRANSMITTED_INFECTIONS") ||
+            withValueSet("VsacYear2019", "LAB_TESTS_DURING_PREGNANCY")
+        )
+     or exists Medication(
+            overlaps($program.measurementPeriod),
+            withValueSet("VsacYear2019", "CONTRACEPTIVE_MEDICATIONS")
+        )
+    )
+    and (
+        (   $e1: ClinicalActivity(
+                startsDuring($program.measurementPeriod),
+                withValueSet("HedisYear2019", "PREGNANCY_TEST_EXCLUSION")
+            )
+            and exists Medication(
+                startsDuring($program.measurementPeriod),
+                startsDuring($e1.startDate.minusDays(6),$e1.startDate),
+                withValueSet("NcqaYear2019", "RETINOID_MEDICATIONS")
+            )
+        )
+     or (   $e2: LaboratoryTestPerformed(
+                startsDuring($program.measurementPeriod),
+                withValueSet("HedisYear2019", "PREGNANCY_TEST_EXCLUSION")
+            )
+            and exists Medication(
+                startsDuring($program.measurementPeriod),
+                startsDuring($e2.startDate.minusDays(6),$e2.startDate),
+                withValueSet("NcqaYear2019", "RETINOID_MEDICATIONS")
+            )
+        )
+     or (   $e3: ClinicalActivity(
+                startsDuring($program.measurementPeriod),
+                withValueSet("HedisYear2019", "PREGNANCY_TEST_EXCLUSION")
+            )
+            and exists ClinicalActivity(
+                startsDuring($program.measurementPeriod),
+                startsDuring($e3.startDate.minusDays(6),$e3.startDate),
+                withValueSet("HedisYear2019", "DIAGNOSTIC_RADIOLOGY")
+            )
+        )
+     or (   $e4: LaboratoryTestPerformed(
+                startsDuring($program.measurementPeriod),
+                withValueSet("HedisYear2019", "PREGNANCY_TEST_EXCLUSION")
+            )
+            and exists ClinicalActivity(
+                startsDuring($program.measurementPeriod),
+                startsDuring($e4.startDate.minusDays(6),$e4.startDate),
+                withValueSet("HedisYear2019", "DIAGNOSTIC_RADIOLOGY")
+            )
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Chl', MeasureStatusValue.EXCLUSION, "exclusion_1");
+end
+
+rule 'Year2019.Chl.Success.performance_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Chl')
+    ( exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("HedisYear2019", "CHLAMYDIA_TESTS") ||
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_G9820")
+        )
+     or exists LaboratoryTestPerformed(
+            startsDuring($program.measurementPeriod),
+            withValueSet("HedisYear2019", "CHLAMYDIA_TESTS")
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Chl', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Chl.Gap.performance_not_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Chl')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Chl', MeasureStatusValue.GAP, "performance_not_met");
+end

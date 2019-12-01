@@ -1,0 +1,135 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+import java.util.Set;
+import java.util.HashSet;
+
+global PatientResults controlSet;
+
+declare HedisArt2019Discharges
+  encounter: ClinicalActivity
+end
+
+declare HedisArt2019OutPatient
+  encounter: ClinicalActivity
+end
+
+declare HedisArt2019Total
+	collectset: Set
+end 
+
+rule 'Year2019.Art.HedisArt2019OutPatient'
+when
+	$program: Program(rules contains 'measure.Hedis.2019.Art')
+	$encounter:	ClinicalActivity(
+		startsDuring($program.measurementPeriod),
+		withValueSet("HedisYear2019", "OUTPATIENT"))
+		exists Diagnosis(
+			startsDuring($encounter),
+			withValueSet("HedisYear2019", "RHEUMATOID_ARTHRITIS")
+		)
+then
+  insert(new HedisArt2019OutPatient($encounter));
+end
+
+rule 'Year2019.Art.HedisArt2019Discharges'
+when
+	$program: Program(rules contains 'measure.Hedis.2019.Art')
+	$encounter:	ClinicalActivity(
+					startsDuring($program.measurementPeriod),
+					withValueSet("HedisYear2019", "INPATIENT_STAY"))
+				exists ClinicalActivity(
+					startsDuring($encounter),
+					withValueSet("HedisYear2019", "NONACUTE_INPATIENT_STAY"))
+				exists Diagnosis(
+					startsDuring($encounter),
+					withValueSet("HedisYear2019", "RHEUMATOID_ARTHRITIS"))
+then
+  insert(new HedisArt2019Discharges($encounter));
+end
+
+rule 'Year2019.Art.TotalArtOutpatientVisitsandDischarges'
+when
+	$outpatientVisits: java.util.Set($outpatientSize:size) from accumulate(
+		HedisArt2019OutPatient($encounter: encounter);
+		collectSet($encounter.startDate.toString())
+	)
+	$discharges: java.util.Set($dischargesSize:size) from accumulate(
+		HedisArt2019Discharges($encounter: encounter);
+		collectSet($encounter.startDate.toString())
+	)
+then
+  insert(new HedisArt2019Total(new HashSet<String>() {{
+  	addAll($outpatientVisits);
+  	addAll($discharges);}}));
+end
+
+
+rule 'Year2019.Art.Denominator'
+when
+	$program: Program(rules contains 'measure.Hedis.2019.Art')
+	$patient: Patient( getAgeInYearsAt($program.measurementPeriod.end) >= 18)
+	HedisArt2019Total( collectset.size>=2)
+	and not ClinicalActivity(
+		startsDuring($program.measurementPeriod),
+		withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE")||
+		withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+	)
+then
+	insert(new PatientDenominator($program, $patient, 'Year2019.Art'));
+end
+
+rule 'Year2019.Art.Exclusion.exclusion_1'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Art')
+    Diagnosis(
+        startsBefore($program.measurementPeriod.end),
+        withValueSet("HedisYear2019", "HIV") ||
+        withValueSet("HedisYear2019", "HIV_TYPE_2")
+    )
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Art', MeasureStatusValue.EXCLUSION, "exclusion_1");
+end
+
+rule 'Year2019.Art.Exclusion.exclusion_2'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Art')
+    Diagnosis(
+        overlaps($program.measurementPeriod),
+        withValueSet("HedisYear2019", "PREGNANCY")
+    )
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Art', MeasureStatusValue.EXCLUSION, "exclusion_2");
+end
+
+rule 'Year2019.Art.Success.performance_met'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Art')
+	(
+		exists (
+			ClinicalActivity(
+				startsDuring($program.measurementPeriod),
+				withValueSet("HedisYear2019", "DMARD")
+			)
+		)
+		or exists (
+			Medication(
+				startsDuring($program.measurementPeriod),
+				prescribed == true,
+				withValueSet("AbleYear2019", "DMARD_MEDICATION")
+			)
+		)
+	)
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Art', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Art.Gap.performance_not_met'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Art')
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Art', MeasureStatusValue.GAP, "performance_not_met");
+end
+

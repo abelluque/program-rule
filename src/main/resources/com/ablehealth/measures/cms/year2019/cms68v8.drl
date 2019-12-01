@@ -1,0 +1,50 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Cms68v8.Denominator'
+when
+    $program: Program(rules contains 'measure.Cms.2019.Cms68v8')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        endsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "MEDICATIONS_ENCOUNTER_CODE_SET")
+    )
+    $patient: Patient(getAgeInYearsAt($program.measurementPeriod.start) >= 18)
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Cms68v8'));
+end
+
+rule 'Year2019.Cms68v8.Success.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms68v8')
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("VsacYear2019", "DOCUMENTATION_OF_CURRENT_MEDICATIONS_PROCEDURE")
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Cms68v8', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Cms68v8.Exception.exception_medicalreason'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms68v8')
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("VsacYear2019", "DOCUMENTATION_OF_CURRENT_MEDICATIONS_PROCEDURE"),
+        withChildValueSet("VsacYear2019", "MEDICAL_OR_OTHER_REASON_NOT_DONE")
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Cms68v8', MeasureStatusValue.EXCEPTION, "exception_medicalreason");
+end
+
+rule 'Year2019.Cms68v8.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms68v8')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Cms68v8', MeasureStatusValue.GAP, "performance_not_met");
+end

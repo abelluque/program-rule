@@ -1,0 +1,228 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import accumulate com.ablehealth.functions.LatestClinicalActivityWithLowestResultAccumulateFunction latestClinicalActivityWithLowerResults;
+
+global PatientResults controlSet;
+
+declare LastSystolicMeasurement
+  lastSystolicMeasurement: ClinicalActivity
+end
+
+declare LastDiastolicMeasurement
+  lastDiastolicMeasurement: ClinicalActivity
+end
+
+rule 'Year2019.Cbp.LastSystolicMeasurement'
+when
+  PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cbp')
+  $lastSystolicMeasurement: ClinicalActivity() from accumulate (
+	  $c: ClinicalActivity(
+  		startsDuring($program.measurementPeriod),
+  		withValueSet("VsacYear2019", "SYSTOLIC_BLOOD_PRESSURE"),
+  		resultAsDecimal != null
+	  ),
+	  latestClinicalActivityWithLowerResults($c)
+	)
+then
+  insert(new LastSystolicMeasurement($lastSystolicMeasurement));
+end
+
+rule 'Year2019.Cbp.LastDiastolicMeasurement'
+when
+  PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cbp')
+  $lastDiastolicMeasurement: ClinicalActivity() from accumulate (
+	  $c: ClinicalActivity(
+  		startsDuring($program.measurementPeriod),
+  		withValueSet("VsacYear2019", "DIASTOLIC_BLOOD_PRESSURE"),
+  		resultAsDecimal != null
+	  ),
+	  latestClinicalActivityWithLowerResults($c)
+	)
+then
+  insert(new LastDiastolicMeasurement($lastDiastolicMeasurement));
+end
+
+rule 'Year2019.Cbp.Denominator'
+when
+	$program: Program(rules contains 'measure.Hedis.2019.Cbp')
+	$patient: Patient(
+		getAgeInYearsAt($program.measurementPeriod.end) >= 18,
+		getAgeInYearsAt($program.measurementPeriod.end) <= 85
+	)
+	$encounter: ClinicalActivity(
+		startsDuring($program.measurementPeriod.end.plusDays(1).minusMonths(24),$program.measurementPeriod.end),
+		withValueSet("HedisYear2019", "OUTPATIENT_WITHOUT_UBREV")
+	)
+	exists Diagnosis(
+		startsDuring($encounter),
+		withValueSet("HedisYear2019", "ESSENTIAL_HYPERTENSION")
+	)
+	not ClinicalActivity(
+		startsDuring($program.measurementPeriod),
+		withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+		withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+	)
+then
+	insert(new PatientDenominator($program, $patient, 'Year2019.Cbp'));
+end
+
+rule 'Year2019.Cbp.Exclusion.exclusion_1'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cbp')
+	(
+	  exists Diagnosis(
+		  startsOnOrBefore($program.measurementPeriod.end),
+		  withValueSet("HedisYear2019", "ESRD")
+		)
+	 or exists ClinicalActivity(
+		  startsOnOrBefore($program.measurementPeriod.end),
+		  withValueSet("HedisYear2019", "ESRD") ||
+		  withValueSet("HedisYear2019", "ESRD_OBSOLETE") ||
+		  withValueSet("HedisYear2019", "KIDNEY_TRANSPLANT")
+		)
+	)
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cbp', MeasureStatusValue.EXCLUSION, "exclusion_1");
+end
+
+rule 'Year2019.Cbp.Exclusion.exclusion_2'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cbp')
+	exists Diagnosis(
+		overlaps($program.measurementPeriod),
+		withValueSet("HedisYear2019", "PREGNANCY")
+	)
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cbp', MeasureStatusValue.EXCLUSION, "exclusion_2");
+end
+
+rule 'Year2019.Cbp.Exclusion.exclusion_3'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cbp')
+	$inpatient_stay: ClinicalActivity(
+		startsDuring($program.measurementPeriod),
+		withValueSet("HedisYear2019", "INPATIENT_STAY")
+	)
+	exists ClinicalActivity(
+		startsDuring($program.measurementPeriod),
+		startsDuring($inpatient_stay),
+		withValueSet("HedisYear2019", "NONACUTE_INPATIENT_STAY")
+	)
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cbp', MeasureStatusValue.EXCLUSION, "exclusion_3");
+end
+
+rule 'Year2019.Cbp.Success.performance_met'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cbp')
+	(
+	  (
+  		(
+        exists LastSystolicMeasurement(
+          $lastSystolicMeasurement: lastSystolicMeasurement,
+          $lastSystolicMeasurement.resultAsDecimal < 140
+        )
+        or exists ClinicalActivity(
+          startsDuring($program.measurementPeriod),
+          withValueSet("MipsYear2019", "PERFORMANCE_MET_G8752")
+        )
+		  )
+  	  and (
+  		  exists LastDiastolicMeasurement(
+    			$lastDiastolicMeasurement: lastDiastolicMeasurement,
+    			$lastDiastolicMeasurement.resultAsDecimal < 90
+  		  )
+  		  or exists ClinicalActivity(
+  			  startsDuring($program.measurementPeriod),
+  			  withValueSet("MipsYear2019", "PERFORMANCE_MET_G8754")
+  		  )
+  		)
+	  )
+    or (
+  		Patient(
+  		  externalId == $patient.externalId,
+  		  $patient.getAgeInYearsAt($program.measurementPeriod.end) >= 60
+  		)
+  	  and not (
+    		$acute_encounter: ClinicalActivity(
+    		  startsDuring($program.measurementPeriod.end.plusDays(1).minusMonths(24),$program.measurementPeriod.end),
+    		  withValueSet("HedisYear2019", "ACUTE_INPATIENT")
+    		)
+    		and exists Diagnosis(
+    		  startsDuring($program.measurementPeriod.end.plusDays(1).minusMonths(24),$program.measurementPeriod.end),
+    		  startsDuring($acute_encounter),
+    		  withValueSet("HedisYear2019", "DIABETES")
+  		  )
+  	  )
+  	  and not (
+    		accumulate(
+    		  $non_acute_encounter: ClinicalActivity(
+      			startsDuring($program.measurementPeriod.end.plusDays(1).minusMonths(24),$program.measurementPeriod.end),
+      			withValueSet("HedisYear2019", "OUTPATIENT") ||
+      			withValueSet("HedisYear2019", "OBSERVATION") ||
+      			withValueSet("HedisYear2019", "ED") ||
+      			withValueSet("HedisYear2019", "NONACUTE_INPATIENT")
+    		  )
+    		  and exists Diagnosis(
+    				startsDuring($program.measurementPeriod.end.plusDays(1).minusMonths(24),$program.measurementPeriod.end),
+    				startsDuring($non_acute_encounter),
+    				withValueSet("HedisYear2019", "DIABETES")
+    			);
+    		  $non_acute_encounters: count(1);
+    		  $non_acute_encounters >= 2
+    		)
+  	  )
+  	  and (
+  		  exists LastSystolicMeasurement(
+    			$lastSystolicMeasurement: lastSystolicMeasurement,
+    			$lastSystolicMeasurement.resultAsDecimal < 150
+  		  )
+  		 or
+  		  exists ClinicalActivity(
+  			  startsDuring($program.measurementPeriod),
+  			  withValueSet("MipsYear2019", "PERFORMANCE_MET_G8752")
+  		  )
+  		)
+  	  and (
+  		  exists LastDiastolicMeasurement(
+    			$lastDiastolicMeasurement: lastDiastolicMeasurement,
+    			$lastDiastolicMeasurement.resultAsDecimal < 90
+  		  )
+  		  or exists ClinicalActivity(
+  			  startsDuring($program.measurementPeriod),
+  			  withValueSet("MipsYear2019", "PERFORMANCE_MET_G8754")
+  		  )
+  		)
+	  )
+	)
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cbp', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Cbp.Gap.out_of_range'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cbp')
+	exists ClinicalActivity(
+		startsDuring($program.measurementPeriod),
+		withValueSet("VsacYear2019", "SYSTOLIC_BLOOD_PRESSURE"),
+		resultAsDecimal != null
+	)
+	exists ClinicalActivity(
+		startsDuring($program.measurementPeriod),
+		withValueSet("VsacYear2019", "DIASTOLIC_BLOOD_PRESSURE"),
+		resultAsDecimal != null
+	)
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cbp', MeasureStatusValue.GAP, "out_of_range");
+end
+
+rule 'Year2019.Cbp.Gap.no_blood_pressure'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cbp')
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cbp', MeasureStatusValue.GAP, "no_blood_pressure");
+end

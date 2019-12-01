@@ -1,0 +1,107 @@
+package com.ablehealth;
+
+import com.ablehealth.model.Patient;
+import com.ablehealth.model.Diagnosis;
+import com.ablehealth.model.HccValueSet;
+import com.ablehealth.payloads.Program;
+import com.ablehealth.model.HccExclusion;
+import com.ablehealth.model.HccInteraction;
+
+global com.ablehealth.results.PatientResults controlSet;
+
+declare Hcc
+    hcc: int
+end
+
+declare Exclude
+    hcc: int
+end
+
+declare PatientInteraction
+    name: String
+end
+
+rule 'HCC Inferences'
+when
+    Program($mp: riskCodingPeriod, rules contains 'risk.cms_hcc')
+    $hcc: HccValueSet()
+    exists Diagnosis(withValueSet($hcc), startsDuring($mp), fromClaim())
+then
+    insert(new Hcc($hcc.hccId));
+end
+
+rule 'HCC Exclusions'
+when
+    Hcc($parent: hcc)
+    Hcc($excluded: hcc)
+    HccExclusion(parent == $parent, excluded contains $excluded)
+then
+    insert(new Exclude($excluded));
+end
+
+rule 'HCC Interactions'
+when
+    $left: Hcc()
+    $right: Hcc()
+    $interaction: HccInteraction(left contains $left.hcc, right contains $right.hcc)
+then
+    insert(new PatientInteraction($interaction.name));
+    controlSet.addVariable("hcc_interactions." + $interaction.name);
+end
+
+rule 'risk.CMS_HCC.DISABLED_HCC85'
+when
+    Hcc(hcc == 85)
+    Patient(disabled)
+then
+    controlSet.addVariable('status_hcc_interactions.DISABLED_HCC85');
+end
+
+rule 'risk.CMS_HCC.DISABLED_PRESSURE_ULCER'
+when
+    Hcc(hcc in (157, 158))
+    Patient(disabled)
+then
+    controlSet.addVariable('status_hcc_interactions.DISABLED_PRESSURE_ULCER');
+end
+
+rule 'risk.CMS_HCC.DISABLED_HCC161'
+when
+    Hcc(hcc == 161)
+    Patient(disabled)
+then
+    controlSet.addVariable('status_hcc_interactions.DISABLED_HCC161');
+end
+
+rule 'risk.CMS_HCC.DISABLED_HCC39'
+when
+    Hcc(hcc == 39)
+    Patient(disabled)
+then
+    controlSet.addVariable('status_hcc_interactions.DISABLED_HCC39');
+end
+
+rule 'risk.CMS_HCC.DISABLED_HCC77'
+when
+    Hcc(hcc == 77)
+    Patient(disabled)
+then
+    controlSet.addVariable('status_hcc_interactions.DISABLED_HCC77');
+end
+
+rule 'risk.CMS_HCC.DISABLED_HCC6'
+when
+    Hcc(hcc == 6)
+    Patient(disabled)
+then
+    controlSet.addVariable('status_hcc_interactions.DISABLED_HCC6');
+end
+
+rule 'HCCs without excluded'
+when
+    Hcc($hcc: hcc)
+    not Exclude(hcc == $hcc)
+then
+    controlSet.addVariable("hccs.HCC" + $hcc);
+end
+

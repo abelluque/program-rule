@@ -1,0 +1,49 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2018.Hedis.Trc4.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2018.Trc4')
+    Patient(getAgeInYearsAt($program.measurementPeriod.end) >= 18)
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod.start, $program.measurementPeriod.end.minusDays(30)),
+        withValueSet("HedisYear2018", "INPATIENT_STAY")
+    )
+    not ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2018", "MIPS_HOSPICE_SERVICE") || withValueSet("VsacYear2018", "PALLIATIVE_CARE")
+    )
+    not ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("HedisYear2018", "INPATIENT_STAY"),
+        startsOnOrBefore($encounter.startDate.plusDays(30)),
+        startDate.isAfter($encounter.startDate)
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2018.Trc4'));
+end
+
+rule 'Year2018.Hedis.Trc4.SuccessReasons.PerformanceMet'
+when
+    EncounterDenominator($encounter: clinicalActivity, $program: program, measure == 'Year2018.Trc4')
+    $patient: Patient()
+    exists ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("HedisYear2018", "MEDICATION_RECONCILIATION") || withValueSet("AbleYear2018", "MEDICATION_RECONCILIATION"),
+        startsDuring($encounter.stopDate, $encounter.stopDate.plusDays(30))
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Trc4', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2018.Hedis.Trc4.GapReasons.PerformanceNotMet'
+when
+    EncounterDenominator($encounter: clinicalActivity, $program: program, measure == 'Year2018.Trc4')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Trc4', MeasureStatusValue.GAP, "performance_not_met");
+end

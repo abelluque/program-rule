@@ -1,0 +1,57 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips430.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips430')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_430_PROCEDURE")
+    )
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "MIPS_430_INHALATIONAL_ANESTHETIC_AGENT")
+    )
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "MIPS_430_3_RISK_FACTORS_FOR_PONV")
+    )
+    $patient: Patient(getAgeInYearsAt($encounter.startDate) >= 18)
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips430'));
+end
+
+rule 'Year2019.Mips430.Success.MipsG9775'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips430')
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "PERFORMANCE_MET_G9775")
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips430', MeasureStatusValue.SUCCESS, "G9775");
+end
+
+rule 'Year2019.Mips430.Exception.MipsG9776'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips430')
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G9776")
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips430', MeasureStatusValue.EXCEPTION, "G9776");
+end
+
+rule 'Year2019.Mips430.Gaps.MipsG9777'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips430')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips430', MeasureStatusValue.GAP, "G9777");
+end
+

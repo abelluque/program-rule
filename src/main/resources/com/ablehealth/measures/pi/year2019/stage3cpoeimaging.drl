@@ -1,0 +1,38 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import java.util.Collection;
+
+global PatientResults controlSet;
+global Collection<Provider> providers;
+
+rule 'Year2019.Stage3cpoeimaging.Denominator'
+when
+    $program: Program(rules contains 'measure.Pi.2019.Stage3cpoeimaging')
+    $encounter: Order(
+        startsDuring($program.piMeasurementPeriod),
+        codeType == "CPT",
+        codeValueInExclusiveRange(69999, 80000)
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Stage3cpoeimaging'));
+end
+
+rule 'Year2019.Stage3cpoeimaging.Success.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: order, measure == 'Year2019.Stage3cpoeimaging')
+    eval($encounter.computerizedPhysicianOrderEntry != null && $encounter.computerizedPhysicianOrderEntry == true)
+then
+    controlSet.addEncounterMeasureStatusesForMatchingProviders($program, $encounter, 'Year2019.Stage3cpoeimaging', MeasureStatusValue.SUCCESS, "performance_met", providers);
+end
+
+rule 'Year2019.Stage3cpoeimaging.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $encounter: order, measure == 'Year2019.Stage3cpoeimaging')
+then
+    controlSet.addEncounterMeasureStatusesForMatchingProviders($program, $encounter, 'Year2019.Stage3cpoeimaging', MeasureStatusValue.GAP, "performance_not_met", providers);
+end
+

@@ -1,0 +1,154 @@
+package com.ablehealth.measures.hedis.year2019;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import accumulate com.ablehealth.functions.EarliestMedicationAccumulateFunction earliestMedication;
+
+global PatientResults controlSet;
+
+declare DepressionMedication
+  medication: Medication
+end
+
+declare FirstDepressionMedicationDuringIndexingPeriod
+  medication: Medication
+end
+
+rule 'Year2019.Amm2.DepressionMedication'
+when
+    $program: Program(rules contains 'measure.Hedis.2019.Amm2')
+    $medication: Medication(
+        startsDuring(
+            $program.measurementPeriod.end.plusDays(1).minusMonths(24),
+            $program.measurementPeriod.end
+        ),
+        prescribed == true,
+        withValueSet("HedisYear2019", "ANTIDEPRESSANT_MEDICATIONS") ||
+        withValueSet("NcqaYear2019", "ANTIDEPRESSANT_MEDICATIONS")
+    )
+then
+  insert(new DepressionMedication($medication));
+end
+
+rule 'Year2019.Amm2.FirstDepressionMedicationDuringIndexingPeriod'
+when
+  $program: Program(rules contains 'measure.Hedis.2019.Amm2')
+  $firstDepressionMedication: Medication() from accumulate (
+    DepressionMedication(
+        $medication: medication,
+        $medication.startsDuring(
+            $program.measurementPeriod.start.minusMonths(8),
+            $program.measurementPeriod.end.minusMonths(8)
+        )
+    ),
+    earliestMedication($medication)
+  )
+then
+  insert(new FirstDepressionMedicationDuringIndexingPeriod($firstDepressionMedication));
+end
+
+rule 'Year2019.Amm2.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2019.Amm2')
+    $patient: Patient(
+        getAgeInYearsAt($program.measurementPeriod.end.minusMonths(8)) >= 18
+    )
+    and not (
+        exists (
+            ClinicalActivity(
+                startsDuring($program.measurementPeriod),
+                withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+                withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+            )
+        )
+    )
+    and exists (
+        DepressionMedication(
+            $medication: medication,
+            $medication.startsDuring(
+            	$program.measurementPeriod.start.minusMonths(8),
+                $program.measurementPeriod.end.minusMonths(8)
+            )
+        )
+    )
+then
+    insert(new PatientDenominator($program, $patient, 'Year2019.Amm2'));
+end
+
+rule 'Year2019.Amm2.Exclusion.exclusion_1'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Amm2')
+    FirstDepressionMedicationDuringIndexingPeriod(
+        $firstMedication: medication
+    )
+    and not (
+        $encounter: ClinicalActivity(
+            startsDuring(
+                $firstMedication.startDate.minusDays(60),
+                $firstMedication.startDate.plusDays(60)
+            ),
+            (
+                withValueSet("HedisYear2019", "ED") ||
+                withValueSet("HedisYear2019", "INPATIENT_STAY") ||
+                withValueSet("HedisYear2019", "AMM_STAND_ALONE_VISITS") ||
+                withValueSet("HedisYear2019", "TELEPHONE_VISITS")
+            ) || (
+                withValueSet("HedisYear2019", "AMM_VISITS") &&
+                placeOfService in ('02', '03', '05', '07', '09', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '22', '24', '33', '49', '50', '52', '53', '71', '72')
+            )
+        )
+        and exists Diagnosis(
+            startsDuring($encounter),
+            withValueSet("HedisYear2019", "MAJOR_DEPRESSION")
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Amm2', MeasureStatusValue.EXCLUSION, "exclusion_1");
+end
+
+rule 'Year2019.Amm2.Exclusion.exclusion_2'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Amm2')
+    FirstDepressionMedicationDuringIndexingPeriod(
+        $firstDepressionMedication: medication
+    )
+    and exists (
+        DepressionMedication(
+            $medication: medication,
+            $medication.startsBefore($program.measurementPeriod.start.minusMonths(8)),
+            $firstDepressionMedication.startsOnOrBefore($medication.startDate.plusDays(105))
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Amm2', MeasureStatusValue.EXCLUSION, "exclusion_2");
+end
+
+rule 'Year2019.Amm2.Success.performance_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Amm2')
+    FirstDepressionMedicationDuringIndexingPeriod(
+        $firstMedication: medication
+    )
+    accumulate(
+        DepressionMedication(
+            $medication: medication,
+            $medication.startsDuring(
+            	$program.measurementPeriod.start.minusMonths(8),
+                $program.measurementPeriod.end
+            )
+        ),
+        $totalDays: sum($medication.totalDaysSupplied($firstMedication.startDate.plusDays(231)));
+        $totalDays >= 180
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Amm2', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Amm2.Gap.performance_not_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Amm2')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Amm2', MeasureStatusValue.GAP, "performance_not_met");
+end

@@ -1,0 +1,52 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2018.Hedis.Coa2.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2018.Coa2')
+    $patient: Patient(getAgeInYearsAt($program.measurementPeriod.end) >= 66)
+    not ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2018", "MIPS_HOSPICE_SERVICE") || withValueSet("VsacYear2018", "PALLIATIVE_CARE")
+    )
+then
+    insert(new PatientDenominator($program, $patient, 'Year2018.Coa2'));
+end
+
+rule 'Year2018.Hedis.Coa2.SuccessReasons.PerformanceMet (Medication Review and List)'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2018.Coa2')
+    exists ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("HedisYear2018", "MEDICATION_REVIEW")
+    )
+    exists ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("HedisYear2018", "MEDICATION_LIST")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Coa2', MeasureStatusValue.SUCCESS, 'performance_met');
+end
+
+rule 'Year2018.Hedis.Coa2.SuccessReasons.PerformanceMet (Transitional Care)'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2018.Coa2')
+    exists ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("HedisYear2018", "TRANSITIONAL_CARE_MANAGEMENT_SERVICES")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Coa2', MeasureStatusValue.SUCCESS, 'performance_met');
+end
+
+rule 'Year2018.Hedis.Coa2.GapReasons.PerformanceNotMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2018.Coa2')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Coa2', MeasureStatusValue.GAP, 'performance_not_met');
+end

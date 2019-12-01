@@ -1,0 +1,93 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mipspihie4.Denominator.NewDenominatorEncounter'
+when
+    $program: Program(rules contains 'measure.Pi.2019.Mipspihie4')
+    $encounter: Encounter(
+        startsDuring($program.piMeasurementPeriod)
+    )
+    exists ClinicalActivity(
+        startsDuring($program.piMeasurementPeriod),
+        withValueSet("AbleYear2019", "NEW_ENCOUNTER"),
+        encounterExternalId == $encounter.externalId
+    )
+    $summaryOfCare: ClinicalDocument(
+        startsBefore($encounter.stopDatetime),
+        documentType == "INBOUND_SUMMARY_OF_CARE",
+        encounterExternalId == $encounter.externalId
+    )
+then
+    insert(new EncounterDenominator($program, $summaryOfCare, 'Year2019.Mipspihie4'));
+end
+
+rule 'Year2019.Mipspihie4.Denominator.TransferOfCare'
+when
+    $program: Program(rules contains 'measure.Pi.2019.Mipspihie4')
+    $encounter: Encounter(
+        startsDuring($program.piMeasurementPeriod)
+    )
+    exists SystemEvent(
+        startsDuring($program.piMeasurementPeriod),
+        eventType == "INBOUND_TRANSITION_OF_CARE",
+        encounterExternalId == $encounter.externalId
+    )
+    $summaryOfCare: ClinicalDocument(
+        startsBefore($encounter.stopDatetime),
+        documentType == "INBOUND_SUMMARY_OF_CARE",
+        encounterExternalId == $encounter.externalId
+    )
+then
+    insert(new EncounterDenominator($program, $summaryOfCare, 'Year2019.Mipspihie4'));
+end
+
+rule 'Year2019.Mipspihie4.Success.performance_met'
+when
+    EncounterDenominator($program: program, $summaryOfCare: clinicalDocument, measure == 'Year2019.Mipspihie4')
+    $encounter: Encounter(
+      startsDuring($program.piMeasurementPeriod),
+      externalId == $summaryOfCare.encounterExternalId
+    )
+    exists SystemEvent(
+        startsOnOrAfter($summaryOfCare.startDatetime),
+        startsOnOrBefore($program.piMeasurementPeriod.end),
+        eventType == "SUMMARY_OF_CARE_INCORPORATION" ||
+        eventType == "SUMMARY_OF_CARE_INCORPORATION_MIPS",
+        clinicalDocumentExternalId == $summaryOfCare.externalId
+    )
+    and exists SystemEvent(
+        startsOnOrAfter($summaryOfCare.startDatetime),
+        startsOnOrBefore($program.piMeasurementPeriod.end),
+        eventType == "MEDICATION_LIST_RECONCILIATION" ||
+        eventType == "MEDICATION_LIST_RECONCILIATION_MIPS",
+        encounterExternalId == $encounter.externalId
+    )
+    and exists SystemEvent(
+        startsOnOrAfter($summaryOfCare.startDatetime),
+        startsOnOrBefore($program.piMeasurementPeriod.end),
+        eventType == "ALLERGY_LIST_RECONCILIATION" ||
+        eventType == "ALLERGY_LIST_RECONCILIATION_MIPS",
+        encounterExternalId == $encounter.externalId
+    )
+    and exists SystemEvent(
+        startsOnOrAfter($summaryOfCare.startDatetime),
+        startsOnOrBefore($program.piMeasurementPeriod.end),
+        eventType == "PROBLEM_LIST_RECONCILIATION" ||
+        eventType == "PROBLEM_LIST_RECONCILIATION_MIPS",
+        encounterExternalId == $encounter.externalId
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $summaryOfCare, 'Year2019.Mipspihie4', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Mipspihie4.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $summaryOfCare: clinicalDocument, measure == 'Year2019.Mipspihie4')
+then
+    controlSet.addEncounterMeasureStatus($program, $summaryOfCare, 'Year2019.Mipspihie4', MeasureStatusValue.GAP, "performance_not_met");
+end

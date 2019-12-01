@@ -1,0 +1,25 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips138Rate2.Denominator'
+when
+	$program: Program(rules contains 'measure.Mips.2019.Mips138Rate2')
+	$patient: Patient()
+	$encounter: ClinicalActivity(
+		startsDuring($program.measurementPeriod),
+		withValueSet("MipsYear2019", "MIPS_138_EXCISION_OF_MALIGNANT_MELANOMA")
+	)
+	and
+		exists Diagnosis(
+			$encounter.startsOnOrBefore(startDate),
+			$encounter.endsOnOrAfter(startDate),
+			withValueSet("MipsYear2019", "MIPS_138_MELANOMA")
+		)
+then
+	insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips138Rate2'));
+end

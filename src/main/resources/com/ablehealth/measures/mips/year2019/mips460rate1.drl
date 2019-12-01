@@ -1,0 +1,66 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips460Rate1.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips460Rate1')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod.start.minusMonths(15),$program.measurementPeriod.end.minusMonths(15)),
+        withValueSet("MipsYear2019", "MIPS_460_PROCEDURE")
+    )
+    $patient: Patient(getAgeInYearsAt($program.measurementPeriod.start.minusMonths(15)) >= 18)
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips460Rate1'));
+end
+
+rule 'Year2019.Mips460Rate1.Exclusion.exclusion_1'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips460Rate1')
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("MipsYear2019", "LUMBAR_DISORDER")
+        )
+        or exists Diagnosis(
+            overlaps($encounter),
+            withValueSet("MipsYear2019", "LUMBAR_SPINE_REGION_CANCER") || withValueSet("MipsYear2019", "LUMBAR_SPINE_REGION_FRACTURE") || withValueSet("MipsYear2019", "LUMBAR_SPINE_REGION_INFECTION") || withValueSet("MipsYear2019", "LUMBAR_IDIOPATHIC_OR_CONGENITAL_SCOLIOSIS")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips460Rate1', MeasureStatusValue.EXCLUSION, "exclusion_1");
+end
+
+rule 'Year2019.Mips460Rate1.Success.MipsG9944'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips460Rate1')
+    (
+        exists ClinicalActivity(
+          startsDuring($encounter.startDate,$encounter.startDate.plusMonths(15)),
+          withValueSet("MipsYear2019", "PERFORMANCE_MET_G9944")
+        )
+        or (
+          exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusMonths(3),$encounter.startDate),
+            withValueSet("AbleYear2019", "BACK_VISUAL_ANALOG_SCALE")
+          )
+          and exists ClinicalActivity(
+            startsDuring($encounter.startDate.plusMonths(9),$encounter.startDate.plusMonths(15)),
+            withValueSet("AbleYear2019", "BACK_VISUAL_ANALOG_SCALE")
+          )
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips460Rate1', MeasureStatusValue.SUCCESS, "G9944");
+end
+
+rule 'Year2019.Mips460Rate1.Gaps.MipsG9946'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips460Rate1')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips460Rate1', MeasureStatusValue.GAP, "G9946");
+end

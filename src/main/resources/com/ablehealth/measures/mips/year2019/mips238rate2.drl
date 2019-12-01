@@ -1,0 +1,2314 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+declare OrgHypnotics
+end
+
+declare OrgAntiInfectives
+end
+
+declare ProviderHypnotics
+    providerHypnotics: Medication
+end
+
+declare ProviderAntiInfectives
+    providerAntiInfectives: Medication
+end
+
+rule 'Year2019.Mips238Rate2.OrgHypnotics'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips238Rate2')
+    $orgHypnotics: Medication(
+        startsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "NONBENZODIAZEPINE_HYPNOTICS"),
+        prescribed == true
+    )
+    accumulate(
+        $m: Medication(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "NONBENZODIAZEPINE_HYPNOTICS"),
+            prescribed == true
+        );
+        $hypnoticsDaysSupplied: sum($m.totalDaysSupplied($program.measurementPeriodEndDate));
+        $hypnoticsDaysSupplied > 90
+    )
+then
+    insert(new OrgHypnotics());
+end
+
+rule 'Year2019.Mips238Rate2.OrgAntiInfectives'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips238Rate2')
+    $orgAntiInfectives: Medication(
+        startsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "ANTI_INFECTIVES_OTHER"),
+        prescribed == true
+    )
+    accumulate(
+        $m: Medication(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "ANTI_INFECTIVES_OTHER"),
+            prescribed == true
+        );
+        $antiInfectivesDaysSupplied: sum($m.totalDaysSupplied($program.measurementPeriodEndDate));
+        $antiInfectivesDaysSupplied > 90
+    )
+then
+    insert(new OrgAntiInfectives());
+end
+
+rule 'Year2019.Mips238Rate2.ProviderHypnotics'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips238Rate2')
+    $providerHypnotics: Medication(
+        startsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "NONBENZODIAZEPINE_HYPNOTICS"),
+        prescribed == true,
+        providerExternalId == $encounter.providerExternalId
+    )
+    accumulate(
+        $m: Medication(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "NONBENZODIAZEPINE_HYPNOTICS"),
+            prescribed == true,
+            providerExternalId == $providerHypnotics.providerExternalId
+        );
+        $hypnoticsDaysSupplied: sum($m.totalDaysSupplied($program.measurementPeriodEndDate));
+        $hypnoticsDaysSupplied > 90
+    )
+then
+    insert(new ProviderHypnotics($providerHypnotics));
+end
+
+rule 'Year2019.Mips238Rate2.ProviderAntiInfectives'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips238Rate2')
+    $providerAntiInfectives: Medication(
+        startsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "ANTI_INFECTIVES_OTHER"),
+        prescribed == true,
+        providerExternalId == $encounter.providerExternalId
+    )
+    accumulate(
+        $m: Medication(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "ANTI_INFECTIVES_OTHER"),
+            prescribed == true,
+            providerExternalId == $providerAntiInfectives.providerExternalId
+        );
+        $antiInfectivesDaysSupplied: sum($m.totalDaysSupplied($program.measurementPeriodEndDate));
+        $antiInfectivesDaysSupplied > 90
+    )
+then
+    insert(new ProviderAntiInfectives($providerAntiInfectives));
+end
+
+rule 'Year2019.Mips238Rate2.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips238Rate2')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_238_ENCOUNTER")
+    )
+    Patient(getAgeInYearsAt($encounter.startDate) >= 66)
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips238Rate2'));
+end
+
+rule 'Year2019.Mips238Rate2.Success.G9367.Org'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips238Rate2')
+    $patient: Patient()
+    (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_G9367")
+        )
+        or exists (
+            (
+              $firstMedicationCode: Medication(
+                  startsDuring($program.measurementPeriod),
+                  withValueSet("VsacYear2019", "LIST_OF_SINGLE_RXNORM_CODE_CONCEPTS_FOR_HIGH_RISK_DRUGS_FOR_THE_ELDERLY"),
+                  prescribed == true
+              )
+              and exists Medication(
+                  startsDuring($program.measurementPeriod),
+                  prescribed == true,
+                  codeType == $firstMedicationCode.codeType,
+                  codeValue == $firstMedicationCode.codeValue,
+                  startDate != $firstMedicationCode.startDate
+              )
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ACETAMINOPHEN_BUTALBITAL"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ACETAMINOPHEN_BUTALBITAL_CAFFEINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ACETAMINOPHEN_BUTALBITAL_CAFFEINE_CODEINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ACETAMINOPHEN_CHLORPHENIRAMINE_DEXTROMETHORPHAN"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ACETAMINOPHEN_CHLORPHENIRAMINE_DEXTROMETHORPHAN_PHENYLEPHRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ACETAMINOPHEN_CHLORPHENIRAMINE_DEXTROMETHORPHAN_PSEUDOEPHEDRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ACETAMINOPHEN_CHLORPHENIRAMINE_PHENYLEPHRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ACETAMINOPHEN_CHLORPHENIRAMINE_PSEUDOEPHEDRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ACETAMINOPHEN_DEXBROMPHENIRAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ACETAMINOPHEN_DEXTROMETHORPHAN_DIPHENHYDRAMINE_PHENYLEPHRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ACETAMINOPHEN_DEXTROMETHORPHAN_DOXYLAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ACETAMINOPHEN_DEXTROMETHORPHAN_DOXYLAMINE_PHENYLEPHRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ACETAMINOPHEN_DIPHENHYDRAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ACETAMINOPHEN_DIPHENHYDRAMINE_PHENYLEPHRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "AMITRIPTYLINE_CHLORDIAZEPOXIDE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "AMITRIPTYLINE_PERPHENAZINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "AMITRIPTYLINE_HYDROCHLORIDE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ASPIRIN_BUTALBITAL_CAFFEINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ASPIRIN_CAFFEINE_ORPHENADRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ATROPINE_HYOSCYAMINE_PHENOBARBITAL_SCOPOLAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "BENZTROPINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "BROMPHENIRAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "BROMPHENIRAMINE_CODEINE_PHENYLEPHRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "BROMPHENIRAMINE_CODEINE_PSEUDOEPHEDRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "BROMPHENIRAMINE_DEXTROMETHORPHAN_PHENYLEPHRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "BROMPHENIRAMINE_DEXTROMETHORPHAN_PSEUDOEPHEDRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "BROMPHENIRAMINE_PHENYLEPHRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "BROMPHENIRAMINE_PSEUDOEPHEDRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "BUTABARBITAL"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CARBINOXAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CARISOPRODOL"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CHLOPHEDIANOL_CHLORPHENIRAMINE_PHENYLEPHRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CHLOPHEDIANOL_DEXCHLORPHENIRAMINE_PSEUDOEPHEDRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CHLORPHENIRAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CHLORPHENIRAMINE_CODEINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CHLORPHENIRAMINE_DEXTROMETHORPHAN_PHENYLEPHRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CHLORPHENIRAMINE_DEXTROMETHORPHAN_PSEUDOEPHEDRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CHLORPHENIRAMINE_HYDROCODONE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CHLORPHENIRAMINE_HYDROCODONE_PSEUDOEPHEDRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CHLORPHENIRAMINE_PHENYLEPHRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CHLORPHENIRAMINE_PHENYLEPHRINE_PYRILAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CHLORPHENIRAMINE_PSEUDOEPHEDRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CHLORPROPAMIDE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CHLORZOXAZONE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CLEMASTINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CLOMIPRAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CONJUGATED_ESTROGENS"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CONJUGATED_ESTROGENS_MEDROXYPROGESTERONE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CYCLOBENZAPRINE_HYDROCHLORIDE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DESICCATED_THYROID"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DEXBROMPHENIRAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DEXBROMPHENIRAMINE_DEXTROMETHORPHAN_PHENYLEPHRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DEXBROMPHENIRAMINE_PSEUDOEPHEDRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DEXBROMPHENIRAMINE_MALEATE_PSEUDOEPHEDRINE_HYDROCHLORIDE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DEXCHLORPHENIRAMINE_DEXTROMETHORPHAN_PSEUDOEPHEDRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DEXCHLORPHENIRAMINE_PSEUDOEPHEDRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DEXTROMETHORPHAN_DIPHENHYDRAMINE_PHENYLEPHRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DEXTROMETHORPHAN_DOXYLAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DIENOGEST_ESTRADIOL_MULTIPHASIC"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DIPHENHYDRAMINE_IBUPROFEN"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DIPHENHYDRAMINE_PHENYLEPHRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DIPHENHYDRAMINE_HYDROCHLORIDE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DIPYRIDAMOLE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DISOPYRAMIDE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DROSPIRENONE_ESTRADIOL"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ESTERIFIED_ESTROGENS"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ESTERIFIED_ESTROGENS_METHYLTESTOSTERONE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ESTRADIOL"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ESTRADIOL_NORETHINDRONE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ESTROPIPATE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "GLYBURIDE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "GLYBURIDE_METFORMIN"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "GUANFACINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "HYDROCHLOROTHIAZIDE_METHYLDOPA"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "HYDROXYZINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "IMIPRAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "INDOMETHACIN"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ISOXSUPRINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "KETOROLAC_TROMETHAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "MEGESTROL"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "MEPERIDINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "MEPROBAMATE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "METAXALONE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "METHOCARBAMOL"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "METHYLDOPA"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "NIFEDIPINE"),
+                    prescribed == true
+                    );
+                    $mCount: count(1);
+                    $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "PHENOBARBITAL"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "PROMETHAZINE_HYDROCHLORIDE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "PSEUDOEPHEDRINE_TRIPROLIDINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "TRIHEXYPHENIDYL"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "TRIMIPRAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "TRIPROLIDINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "AMOXAPINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "ATROPINE_DIPHENOXYLATE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CYPROHEPTADINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DESIPRAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DICYCLOMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "DIMENHYDRINATE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "HYOSCYAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "HYOSCYAMINE_METHENAMINE_MBLUE_PHENYL_SALICYL"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "HYOSCYAMINE_METHENAMINE_MBLUE_PHENYL_SALICYL_SODIUM_BIPHOSPHATE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "HYOSCYAMINE_METHENAMINE_MBLUE_SODIUM_BIPHOSPHATE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "MECLIZINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "NORTRIPTYLINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "PAROXETINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "PROTRIPTYLINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("VsacYear2019", "CHLORPHENIRAMINE_PHENYLEPHRINE_PHENYLTOLOXAMINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("AbleYear2019", "METHOCARBAMOL"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("AbleYear2019", "ESTRADIOL"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+            or accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("AbleYear2019", "NORTIPTYLINE"),
+                    prescribed == true
+                );
+                $mCount: count(1);
+                $mCount >= 2
+            )
+        )
+        or accumulate(
+            OrgHypnotics();
+            $hypnoticsCount: count(1);
+            $hypnoticsCount > 1
+        )
+        or accumulate(
+            OrgAntiInfectives();
+            $antiInfectivesCount: count(1);
+            $antiInfectivesCount > 1
+        )
+    )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips238Rate2', MeasureStatusValue.SUCCESS, "G9367");
+end
+
+rule 'Year2019.Mips238Rate2.Success.G9367.Provider.PerformanceMet'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips238Rate2')
+    $patient: Patient()
+    exists ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "PERFORMANCE_MET_G9367")
+    )
+then
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips238Rate2', MeasureStatusValue.SUCCESS, 'G9367');
+end
+
+rule 'Year2019.Mips238Rate2.Success.G9367.Provider.Medications'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips238Rate2')
+    $patient: Patient()
+    (
+        accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ACETAMINOPHEN_BUTALBITAL"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ACETAMINOPHEN_BUTALBITAL_CAFFEINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ACETAMINOPHEN_BUTALBITAL_CAFFEINE_CODEINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ACETAMINOPHEN_CHLORPHENIRAMINE_DEXTROMETHORPHAN"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ACETAMINOPHEN_CHLORPHENIRAMINE_DEXTROMETHORPHAN_PHENYLEPHRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ACETAMINOPHEN_CHLORPHENIRAMINE_DEXTROMETHORPHAN_PSEUDOEPHEDRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ACETAMINOPHEN_CHLORPHENIRAMINE_PHENYLEPHRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ACETAMINOPHEN_CHLORPHENIRAMINE_PSEUDOEPHEDRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ACETAMINOPHEN_DEXBROMPHENIRAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ACETAMINOPHEN_DEXTROMETHORPHAN_DIPHENHYDRAMINE_PHENYLEPHRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ACETAMINOPHEN_DEXTROMETHORPHAN_DOXYLAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ACETAMINOPHEN_DEXTROMETHORPHAN_DOXYLAMINE_PHENYLEPHRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ACETAMINOPHEN_DIPHENHYDRAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ACETAMINOPHEN_DIPHENHYDRAMINE_PHENYLEPHRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "AMITRIPTYLINE_CHLORDIAZEPOXIDE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "AMITRIPTYLINE_PERPHENAZINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "AMITRIPTYLINE_HYDROCHLORIDE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ASPIRIN_BUTALBITAL_CAFFEINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ASPIRIN_CAFFEINE_ORPHENADRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ATROPINE_HYOSCYAMINE_PHENOBARBITAL_SCOPOLAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "BENZTROPINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "BROMPHENIRAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "BROMPHENIRAMINE_CODEINE_PHENYLEPHRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "BROMPHENIRAMINE_CODEINE_PSEUDOEPHEDRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "BROMPHENIRAMINE_DEXTROMETHORPHAN_PHENYLEPHRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "BROMPHENIRAMINE_DEXTROMETHORPHAN_PSEUDOEPHEDRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "BROMPHENIRAMINE_PHENYLEPHRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "BROMPHENIRAMINE_PSEUDOEPHEDRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "BUTABARBITAL"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CARBINOXAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CARISOPRODOL"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CHLOPHEDIANOL_CHLORPHENIRAMINE_PHENYLEPHRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CHLOPHEDIANOL_DEXCHLORPHENIRAMINE_PSEUDOEPHEDRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CHLORPHENIRAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CHLORPHENIRAMINE_CODEINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CHLORPHENIRAMINE_DEXTROMETHORPHAN_PHENYLEPHRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CHLORPHENIRAMINE_DEXTROMETHORPHAN_PSEUDOEPHEDRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CHLORPHENIRAMINE_HYDROCODONE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CHLORPHENIRAMINE_HYDROCODONE_PSEUDOEPHEDRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CHLORPHENIRAMINE_PHENYLEPHRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CHLORPHENIRAMINE_PHENYLEPHRINE_PYRILAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CHLORPHENIRAMINE_PSEUDOEPHEDRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CHLORPROPAMIDE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CHLORZOXAZONE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CLEMASTINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CLOMIPRAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CONJUGATED_ESTROGENS"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CONJUGATED_ESTROGENS_MEDROXYPROGESTERONE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CYCLOBENZAPRINE_HYDROCHLORIDE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DESICCATED_THYROID"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DEXBROMPHENIRAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DEXBROMPHENIRAMINE_DEXTROMETHORPHAN_PHENYLEPHRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DEXBROMPHENIRAMINE_PSEUDOEPHEDRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DEXBROMPHENIRAMINE_MALEATE_PSEUDOEPHEDRINE_HYDROCHLORIDE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DEXCHLORPHENIRAMINE_DEXTROMETHORPHAN_PSEUDOEPHEDRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DEXCHLORPHENIRAMINE_PSEUDOEPHEDRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DEXTROMETHORPHAN_DIPHENHYDRAMINE_PHENYLEPHRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DEXTROMETHORPHAN_DOXYLAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DIENOGEST_ESTRADIOL_MULTIPHASIC"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DIPHENHYDRAMINE_IBUPROFEN"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DIPHENHYDRAMINE_PHENYLEPHRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DIPHENHYDRAMINE_HYDROCHLORIDE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DIPYRIDAMOLE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DISOPYRAMIDE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DROSPIRENONE_ESTRADIOL"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ESTERIFIED_ESTROGENS"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ESTERIFIED_ESTROGENS_METHYLTESTOSTERONE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ESTRADIOL"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ESTRADIOL_NORETHINDRONE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ESTROPIPATE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "GLYBURIDE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "GLYBURIDE_METFORMIN"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "GUANFACINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "HYDROCHLOROTHIAZIDE_METHYLDOPA"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "HYDROXYZINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "IMIPRAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "INDOMETHACIN"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ISOXSUPRINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "KETOROLAC_TROMETHAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "MEGESTROL"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "MEPERIDINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "MEPROBAMATE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "METAXALONE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "METHOCARBAMOL"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "METHYLDOPA"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "NIFEDIPINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+                );
+                $mCount: count(1);
+                $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "PHENOBARBITAL"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "PROMETHAZINE_HYDROCHLORIDE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "PSEUDOEPHEDRINE_TRIPROLIDINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "TRIHEXYPHENIDYL"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "TRIMIPRAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "TRIPROLIDINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "AMOXAPINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "ATROPINE_DIPHENOXYLATE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CYPROHEPTADINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DESIPRAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DICYCLOMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "DIMENHYDRINATE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "HYOSCYAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "HYOSCYAMINE_METHENAMINE_MBLUE_PHENYL_SALICYL"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "HYOSCYAMINE_METHENAMINE_MBLUE_PHENYL_SALICYL_SODIUM_BIPHOSPHATE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "HYOSCYAMINE_METHENAMINE_MBLUE_SODIUM_BIPHOSPHATE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "MECLIZINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "NORTRIPTYLINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "PAROXETINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "PROTRIPTYLINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2019", "CHLORPHENIRAMINE_PHENYLEPHRINE_PHENYLTOLOXAMINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("AbleYear2019", "METHOCARBAMOL"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("AbleYear2019", "ESTRADIOL"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("AbleYear2019", "NORTIPTYLINE"),
+                prescribed == true,
+                providerExternalId == $encounter.providerExternalId
+            );
+            $mCount: count(1);
+            $mCount >= 2
+        )
+    )
+then
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips238Rate2', MeasureStatusValue.SUCCESS, 'G9367');
+end
+
+rule 'Year2019.Mips238Rate2.Success.G9367.Provider.HypnoticsCount'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips238Rate2')
+    $patient: Patient()
+    accumulate(
+        ProviderHypnotics(
+            $providerHypnotics: providerHypnotics;
+            $providerHypnotics.providerExternalId == $encounter.providerExternalId
+        );
+        $hypnoticsCount: count(1);
+        $hypnoticsCount > 1
+    )
+then
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips238Rate2', MeasureStatusValue.SUCCESS, 'G9367');
+end
+
+rule 'Year2019.Mips238Rate2.Success.G9367.Provider.AntiInfectivesCount'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips238Rate2')
+    $patient: Patient()
+    accumulate(
+        ProviderAntiInfectives(
+            $providerAntiInfectives: providerAntiInfectives;
+            $providerAntiInfectives.providerExternalId == $encounter.providerExternalId
+        );
+        $antiInfectivesCount: count(1);
+        $antiInfectivesCount > 1
+    )
+then
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips238Rate2', MeasureStatusValue.SUCCESS, 'G9367');
+end
+
+rule 'Year2019.Mips238Rate2.Gap.G9368'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips238Rate2')
+  $patient: Patient()
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips238Rate2', MeasureStatusValue.GAP, 'G9368');
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips238Rate2', MeasureStatusValue.GAP, 'G9368');
+end

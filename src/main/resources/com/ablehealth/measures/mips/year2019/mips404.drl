@@ -1,0 +1,50 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips404.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips404')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_404_PROCEDURE")
+    )
+    exists ClinicalActivity(
+        startsDuring($encounter.startDate.minusDays(30),$encounter.startDate),
+        withValueSet("MipsYear2019", "MIPS_404_SMOKER") || withValueSet("VsacYear2019", "TOBACCO_USER")
+    )
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "MIPS_404_ELECTIVE_SURGERY")
+    )
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "MIPS_404_RECEIVED_ABSTINENCE_INSTRUCTIONS")
+    )
+    $patient: Patient(getAgeInYearsAt($encounter.startDate) >= 18)
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips404'));
+end
+
+rule 'Year2019.Mips404.Success.MipsG9644'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips404')
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "PERFORMANCE_MET_G9644")
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips404', MeasureStatusValue.SUCCESS, "G9644");
+end
+
+rule 'Year2019.Mips404.Gaps.MipsG9645'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips404')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips404', MeasureStatusValue.GAP, "G9645");
+end
+

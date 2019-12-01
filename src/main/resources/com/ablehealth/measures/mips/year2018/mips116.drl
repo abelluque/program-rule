@@ -1,0 +1,100 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2018.Mips116.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2018.Mips116')
+    $mips116encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2018", "MIPS_116_ENCOUNTER")
+    )
+    exists Diagnosis(
+        overlaps($mips116encounter),
+        withValueSet("MipsYear2018", "ACUTE_BRONCHITIS")
+    )
+    Patient(
+        getAgeInYearsAt($mips116encounter.startDate) >= 18,
+        getAgeInYearsAt($mips116encounter.startDate) < 64
+    )
+then
+    insert(new EncounterDenominator($program, $mips116encounter, 'Year2018.Mips116'));
+end
+
+rule 'Year2018.Mips116.Exclusion.Exclusion1'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips116')
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter.startDate,$encounter.startDate.plusDays(1)),
+            withValueSet("HedisYear2018", "INPATIENT_STAY")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips116', MeasureStatusValue.EXCLUSION, "exclusion_1");
+end
+
+rule 'Year2018.Mips116.Exclusion.Exclusion2'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips116')
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("MipsYear2018", "DENOMINATOR_EXCLUSION_G9712")
+        )
+        or exists Diagnosis(
+            overlaps($encounter),
+            (
+                withValueSet("HedisYear2018", "HIV") ||
+                withValueSet("HedisYear2018", "MALIGNANT_NEOPLASMS") ||
+                withValueSet("HedisYear2018", "EMPHYSEMA") ||
+                withValueSet("HedisYear2018", "COPD") ||
+                withValueSet("HedisYear2018", "CYSTIC_FIBROSIS") ||
+                withValueSet("HedisYear2018", "COMORBID_CONDITIONS") ||
+                withValueSet("HedisYear2018", "DISORDERS_OF_THE_IMMUNE_SYSTEM") ||
+                withValueSet("HedisYear2018", "PHARYNGITIS") ||
+                withValueSet("HedisYear2018", "COMPETING_DIAGNOSIS")
+            )
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips116', MeasureStatusValue.EXCLUSION, "exclusion_2");
+end
+
+rule 'Year2018.Mips116.Exclusion.Exclusion3'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips116')
+    (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            (withValueSet("MipsYear2018", "MIPS_HOSPICE_SERVICE") || withValueSet("VsacYear2018", "PALLIATIVE_CARE"))
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips116', MeasureStatusValue.EXCLUSION, "exclusion_3");
+end
+
+rule 'Year2018.Mips116.Success.4124F'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips116')
+    (
+        not ClinicalActivity(
+            startsDuring($encounter.startDate,$encounter.startDate.plusDays(3)),
+            withValueSet("MipsYear2018", "PERFORMANCE_NOT_MET_4120F")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips116', MeasureStatusValue.SUCCESS, "4124F");
+end
+
+rule 'Year2018.Mips116.Gap.4120F'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips116')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips116', MeasureStatusValue.GAP, "4120F");
+end
+

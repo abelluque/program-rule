@@ -1,0 +1,210 @@
+package com.ablehealth.measures.hedis.year2019;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+
+import accumulate com.ablehealth.functions.EarliestMedicationAccumulateFunction earliestMedication;
+
+global PatientResults controlSet;
+
+declare Year2019HedisMma1EncounterDuringMeasurementPeriod
+    encounter: ClinicalActivity
+end
+
+declare Year2019HedisMma1EncounterDuringPriorMeasurementPeriod
+    encounter: ClinicalActivity
+end
+
+rule 'Year2019.Hedis.Mma1.EncounterDuringMeasurementPeriod'
+when
+  $program: Program(rules contains 'measure.Hedis.2019.Mma1')
+  $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("HedisYear2019", "OUTPATIENT") ||
+        withValueSet("HedisYear2019", "OBSERVATION")
+  )
+  exists Diagnosis(
+        startsDuring($encounter),
+        withValueSet("HedisYear2019", "ASTHMA")
+  )
+then
+    insert(new Year2019HedisMma1EncounterDuringMeasurementPeriod($encounter));
+end
+
+rule 'Year2019.Hedis.Mma1.EncounterDuringPriorMeasurementPeriod'
+when
+    $program: Program(rules contains 'measure.Hedis.2019.Mma1')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod.start.minusMonths(12),$program.measurementPeriod.end.minusMonths(12)),
+        withValueSet("HedisYear2019", "OUTPATIENT") ||
+        withValueSet("HedisYear2019", "OBSERVATION")
+    )
+    exists Diagnosis(
+        startsDuring($encounter),
+        withValueSet("HedisYear2019", "ASTHMA")
+    )
+then
+  insert(new Year2019HedisMma1EncounterDuringPriorMeasurementPeriod($encounter));
+end
+
+rule 'Year2019.Mma1.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2019.Mma1')
+    $patient: Patient(
+        getAgeInYearsAt($program.measurementPeriod.end) >= 5,
+        getAgeInYearsAt($program.measurementPeriod.end) < 65
+    )
+    (
+        (
+            $inpatientDuringPeriod: ClinicalActivity(
+                startsDuring($program.measurementPeriod),
+                withValueSet("HedisYear2019", "ED") ||
+                withValueSet("HedisYear2019", "ACUTE_INPATIENT")
+            )
+            and exists Diagnosis(
+                startsDuring($inpatientDuringPeriod),
+                withValueSet("HedisYear2019", "ASTHMA")
+            )
+        )
+        or (
+            ArrayList(size >= 4) from collect(
+                Year2019HedisMma1EncounterDuringMeasurementPeriod($encounter: encounter)
+            )
+            and accumulate(
+                Medication(
+                    startsDuring($program.measurementPeriod),
+                    withValueSet("NcqaYear2019", "ASTHMA_CONTROLLER_MEDICATIONS") ||
+                    withValueSet("NcqaYear2019", "ASTHMA_RELIEVER_MEDICATIONS"),
+                    prescribed == true
+                );
+                $medicationWithEncounterCount: count(1);
+                $medicationWithEncounterCount >= 2
+            )
+        )
+        or accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod),
+                withValueSet("NcqaYear2019", "ASTHMA_CONTROLLER_MEDICATIONS") ||
+                withValueSet("NcqaYear2019", "ASTHMA_RELIEVER_MEDICATIONS"),
+                prescribed == true
+            );
+            $medicationCount: count(1);
+            $medicationCount >= 4
+        )
+    )
+    (
+      (
+        $inpatientDuringPriorPeriod: ClinicalActivity(
+            startsDuring($program.measurementPeriod.start.minusYears(1),$program.measurementPeriod.end.minusYears(1)),
+            withValueSet("HedisYear2019", "ED") ||
+            withValueSet("HedisYear2019", "ACUTE_INPATIENT")
+        )
+        and exists Diagnosis(
+            startsDuring($inpatientDuringPriorPeriod),
+            withValueSet("HedisYear2019", "ASTHMA")
+        )
+      )
+      or (
+        accumulate(
+            Year2019HedisMma1EncounterDuringPriorMeasurementPeriod();
+            $priorEncounterCount: count(1);
+            $priorEncounterCount >= 4
+        )
+        and accumulate(
+            Medication(
+                startsDuring($program.measurementPeriod.start.minusYears(1),$program.measurementPeriod.end.minusYears(1)),
+                withValueSet("NcqaYear2019", "ASTHMA_CONTROLLER_MEDICATIONS") ||
+                withValueSet("NcqaYear2019", "ASTHMA_RELIEVER_MEDICATIONS"),
+                prescribed == true
+            );
+            $priorMedicationWithEncounterCount: count(1);
+            $priorMedicationWithEncounterCount >= 2
+        )
+      )
+      or accumulate(
+        Medication(
+            startsDuring($program.measurementPeriod.start.minusYears(1),$program.measurementPeriod.end.minusYears(1)),
+            withValueSet("NcqaYear2019", "ASTHMA_CONTROLLER_MEDICATIONS") ||
+            withValueSet("NcqaYear2019", "ASTHMA_RELIEVER_MEDICATIONS"),
+            prescribed == true
+        );
+        $priorMedicationCount: count(1);
+        $priorMedicationCount >= 4
+      )
+    )
+    not ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") || withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+    )
+then
+    insert(new PatientDenominator($program, $patient, 'Year2019.Mma1'));
+end
+
+rule 'Year2019.Mma1.Exclusion.exclusion_1'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Mma1')
+    and exists (
+        Diagnosis(
+            startsOnOrBefore($program.measurementPeriod.end),
+            withValueSet("HedisYear2019", "EMPHYSEMA") ||
+            withValueSet("HedisYear2019", "OTHER_EMPHYSEMA") ||
+            withValueSet("HedisYear2019", "COPD") ||
+            withValueSet("HedisYear2019", "OBSTRUCTIVE_CHRONIC_BRONCHITIS") ||
+            withValueSet("HedisYear2019", "CHRONIC_RESPIRATORY_CONDITIONS_DUE_TO_FUMES_VAPORS") ||
+            withValueSet("HedisYear2019", "CYSTIC_FIBROSIS") ||
+            withValueSet("HedisYear2019", "ACUTE_RESPIRATORY_FAILURE")
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mma1', MeasureStatusValue.EXCLUSION, "exclusion_1");
+end
+
+rule 'Year2019.Mma1.Exclusion.exclusion_2'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Mma1')
+    and not (
+        exists (
+            Medication(
+                startsDuring($program.measurementPeriod),
+                prescribed == true,
+                withValueSet("NcqaYear2019", "ASTHMA_CONTROLLER_MEDICATIONS")
+            )
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mma1', MeasureStatusValue.EXCLUSION, "exclusion_2");
+end
+
+rule 'Year2019.Mma1.Success.performance_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Mma1')
+    $earliestMedication: Medication() from accumulate (
+        $m: Medication(
+            startsDuring($program.measurementPeriod),
+            withValueSet("NcqaYear2019", "ASTHMA_CONTROLLER_MEDICATIONS") ||
+            withValueSet("NcqaYear2019", "ASTHMA_RELIEVER_MEDICATIONS")
+        ),
+        earliestMedication($m)
+    )
+    accumulate(
+        $m: Medication(
+            startsDuring($program.measurementPeriod),
+            withValueSet("NcqaYear2019", "ASTHMA_CONTROLLER_MEDICATIONS") ||
+            withValueSet("NcqaYear2019", "ASTHMA_RELIEVER_MEDICATIONS")
+        );
+        $totalDays: sum($m.totalDaysSupplied($program.measurementPeriodEndDate));
+        (double)$totalDays / ChronoUnit.DAYS.between($earliestMedication.startDate, $program.measurementPeriod.end) >= 0.5
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mma1', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Mma1.Gap.performance_not_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Mma1')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mma1', MeasureStatusValue.GAP, "performance_not_met");
+end

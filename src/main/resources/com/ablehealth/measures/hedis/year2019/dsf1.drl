@@ -1,0 +1,82 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Hedis.Dsf1.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2019.Dsf1')
+    $patient: Patient(getAgeInYearsAt($program.measurementPeriod.start) >= 12)
+then
+    insert(new PatientDenominator($program, $patient, 'Year2019.Dsf1'));
+end
+
+rule 'Year2019.Hedis.Dsf1.ExclusionReasons.exclusion_1'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Dsf1')
+    exists Diagnosis(
+        overlaps($program.measurementPeriod),
+        withValueSet("HedisYear2019", "DEPRESSION") ||
+        withValueSet("HedisYear2019", "BIPOLAR_DISORDER")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Dsf1', MeasureStatusValue.EXCLUSION, 'exclusion_1');
+end
+
+rule 'Year2019.Hedis.Dsf1.ExclusionReasons.exclusion_2'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Dsf1')
+    exists ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("HedisYear2019", "HOSPICE")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Dsf1', MeasureStatusValue.EXCLUSION, 'exclusion_2');
+end
+
+rule 'Year2019.Hedis.Dsf1.SuccessReasons.PerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Dsf1')
+    (
+      (
+        Patient(getAgeInYearsAt($program.measurementPeriod.start) < 18)
+        and exists ClinicalActivity(
+          startsDuring($program.measurementPeriod),
+          withValueSet("HedisYear2019", "BECK_DEPRESSION_INVENTORY_FAST_SCREEN_TOTAL_SCORE_BDI") ||
+          withValueSet("HedisYear2019", "CENTER_FOR_EPIDEMIOLOGIC_STUDIES_DEPRESSION_SCALE_REVISED_TOTAL_SCORE_CESD_R") ||
+          withValueSet("HedisYear2019", "PATIENT_HEALTH_QUESTIONNAIRE_2_ITEM_PHQ_2_TOTAL_SCORE_REPORTED") ||
+          withValueSet("HedisYear2019", "PATIENT_HEALTH_QUESTIONNAIRE_9_ITEM_PHQ_9_TOTAL_SCORE_REPORTED") ||
+          withValueSet("HedisYear2019", "PATIENT_HEALTH_QUESTIONNAIRE_9_MODIFIED_FOR_TEENS_TOTAL_SCORE_REPORTED_PHQ_TEEN") ||
+          withValueSet("HedisYear2019", "PROMIS_29_DEPRESSION_SCORE_T_SCORE")
+        )
+      )
+      or (
+        Patient(getAgeInYearsAt($program.measurementPeriod.start) >= 18)
+        and exists ClinicalActivity(
+          startsDuring($program.measurementPeriod),
+          withValueSet("HedisYear2019", "BECK_DEPRESSION_INVENTORY_FAST_SCREEN_TOTAL_SCORE_BDI") ||
+          withValueSet("HedisYear2019", "BECK_DEPRESSION_INVENTORY_II_TOTAL_SCORE_BDI") ||
+          withValueSet("HedisYear2019", "CENTER_FOR_EPIDEMIOLOGIC_STUDIES_DEPRESSION_SCALE_REVISED_TOTAL_SCORE_CESD_R") ||
+          withValueSet("HedisYear2019", "EDINBURGH_POSTNATAL_DEPRESSION_SCALE_EPDS") ||
+          withValueSet("HedisYear2019", "GERIATRIC_DEPRESSION_SCALE_GDS_SHORT_VERSION_TOTAL") ||
+          withValueSet("HedisYear2019", "GERIATRIC_DEPRESSION_SCALE_GDS_TOTAL") ||
+          withValueSet("HedisYear2019", "PATIENT_HEALTH_QUESTIONNAIRE_2_ITEM_PHQ_2_TOTAL_SCORE_REPORTED") ||
+          withValueSet("HedisYear2019", "PATIENT_HEALTH_QUESTIONNAIRE_9_ITEM_PHQ_9_TOTAL_SCORE_REPORTED") ||
+          withValueSet("HedisYear2019", "PROMIS_29_DEPRESSION_SCORE_T_SCORE") ||
+          withValueSet("HedisYear2019", "MY_MOOD_MONITOR_TOTAL_SCORE_M3")
+        )
+      )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Dsf1', MeasureStatusValue.SUCCESS, 'performance_met');
+end
+
+rule 'Year2019.Hedis.Dsf1.GapReasons.PerformanceNotMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Dsf1')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Dsf1', MeasureStatusValue.GAP, 'performance_not_met');
+end

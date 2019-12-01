@@ -1,0 +1,33 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mipspiep1controlled.Denominator'
+when
+    $program: Program(rules contains 'measure.Pi.2019.Mipspiep1controlled')
+    $encounter: Medication(
+        startsDuring($program.piMeasurementPeriod),
+        prescribed == true
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mipspiep1controlled'));
+end
+
+rule 'Year2019.Mipspiep1controlled.Success.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: medication, measure == 'Year2019.Mipspiep1controlled')
+    eval($encounter.prescriptionMethod != null && $encounter.prescriptionMethod.equals('electronic'))
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mipspiep1controlled', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Mipspiep1controlled.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $encounter: medication, measure == 'Year2019.Mipspiep1controlled')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mipspiep1controlled', MeasureStatusValue.GAP, "performance_not_met");
+end

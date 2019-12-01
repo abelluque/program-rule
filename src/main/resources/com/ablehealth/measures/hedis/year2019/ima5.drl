@@ -1,0 +1,25 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Ima5.Success.performance_met'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Ima5')
+	(
+		HedisImaYear2019SuccessMeningococcal()
+	)
+	and
+	(
+		HedisImaYear2019SuccessTdapVaccine()
+	)
+	and
+	(
+		HedisImaYear2019SuccessHpvVaccine()
+	)
+then
+	 controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Ima5', MeasureStatusValue.SUCCESS, "performance_met");
+end

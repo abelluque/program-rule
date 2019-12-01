@@ -1,0 +1,61 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips021.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips021')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_021_PROCEDURE")
+    )
+    $patient: Patient(
+        getAgeInYearsAt($encounter.startDate) >= 18
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips021'));
+end
+
+rule 'Year2019.Mips021.Success.G9197'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips021')
+    $patient: Patient()
+    and (
+        exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_G9197")
+        )
+        or exists Medication(
+            startsDuring($encounter),
+            withValueSet("AbleYear2019", "FIRST_GENERATION_CEPHALOSPORIN") ||
+            withValueSet("AbleYear2019", "SECOND_GENERATION_CEPHALOSPORIN")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips021', MeasureStatusValue.SUCCESS, "G9197");
+end
+
+rule 'Year2019.Mips021.Exception.G9196'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips021')
+    $patient: Patient()
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G9196")
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips021', MeasureStatusValue.EXCEPTION, "G9196");
+end
+
+rule 'Year2019.Mips021.Gap.G9198'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips021')
+    $patient: Patient()
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips021', MeasureStatusValue.GAP, "G9198");
+end
+

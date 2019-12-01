@@ -1,0 +1,182 @@
+package com.ablehealth.measures.mips.year2019;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+declare Mips007TwoOrgEncounters
+  encounter: ClinicalActivity
+end
+
+declare Mips007TwoProviderEncounters
+  providerEncounter: ClinicalActivity
+end
+
+declare Mips007Success
+end
+
+declare Mips007Exception1
+end
+
+declare Mips007Exception2
+end
+
+declare Mips007Exception3
+end
+
+rule 'Year2019.Mips007.TwoEncounters.Org'
+when
+    $program: Program(
+        rules contains 'measure.Mips.2019.Mips007Rate1' ||
+        rules contains 'measure.Mips.2019.Mips007Rate2'
+    )
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        placeOfService != '02',
+        codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+        withValueSet("MipsYear2019", "MIPS_007_ENCOUNTER")
+    )
+    accumulate(
+        ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            placeOfService != '02',
+            codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+            withValueSet("MipsYear2019", "MIPS_007_ENCOUNTER")
+        );
+        $encounterCount: count(1);
+        $encounterCount >= 2
+    )
+then
+    insert(new Mips007TwoOrgEncounters($encounter));
+end
+
+rule 'Year2019.Mips007.TwoEncounters.Provider'
+when
+    $program: Program(
+        rules contains 'measure.Mips.2019.Mips007Rate1' ||
+        rules contains 'measure.Mips.2019.Mips007Rate2'
+    )
+    $providerEncounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        placeOfService != '02',
+        codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+        withValueSet("MipsYear2019", "MIPS_007_ENCOUNTER")
+    )
+    accumulate(
+        ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            placeOfService != '02',
+            codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+            withValueSet("MipsYear2019", "MIPS_007_ENCOUNTER"),
+            providerExternalId == $providerEncounter.providerExternalId
+        );
+        $encounterCount: count(1);
+        $encounterCount >= 2
+    )
+then
+    insert(new Mips007TwoProviderEncounters($providerEncounter));
+end
+
+rule 'Year2019.Mips007.Success'
+when
+    EncounterDenominator(
+        $program: program,
+        $encounter: clinicalActivity,
+        measure == 'Year2019.Mips007Rate1' ||
+        measure == 'Year2019.Mips007Rate2'
+    )
+    $patient: Patient()
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_G9189_OR_4008F"),
+            codeModifiers.isEmpty()
+        )
+        or exists Medication(
+            overlaps($encounter),
+            withValueSet("VsacYear2019", "BETA_BLOCKER_THERAPY")
+        )
+    )
+then
+    insert(new Mips007Success());
+end
+
+rule 'Year2019.Mips007.Exception1'
+when
+    EncounterDenominator(
+        $program: program,
+        $encounter: clinicalActivity,
+        measure == 'Year2019.Mips007Rate1' ||
+        measure == 'Year2019.Mips007Rate2'
+    )
+    $patient: Patient()
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G9190") ||
+            (
+                withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_4008F_1P") &&
+                codeModifiers contains '1P'
+            )
+        )
+        or exists Allergy(
+            overlaps($encounter),
+            withValueSet("VsacYear2019", "BETA_BLOCKER_THERAPY_INGREDIENT")
+        )
+        or exists Diagnosis(
+            overlaps($encounter),
+            withValueSet("VsacYear2019", "ALLERGY_TO_BETA_BLOCKER_THERAPY") ||
+            withValueSet("VsacYear2019", "INTOLERANCE_TO_BETA_BLOCKER_THERAPY") ||
+            withValueSet("VsacYear2019", "ARRHYTHMIA") ||
+            withValueSet("VsacYear2019", "HYPOTENSION") ||
+            withValueSet("VsacYear2019", "ASTHMA") ||
+            withValueSet("VsacYear2019", "BRADYCARDIA")
+        )
+    )
+then
+    insert(new Mips007Exception1());
+end
+
+rule 'Year2019.Mips007.Exception2'
+when
+    EncounterDenominator(
+        $program: program,
+        $encounter: clinicalActivity,
+        measure == 'Year2019.Mips007Rate1' ||
+        measure == 'Year2019.Mips007Rate2'
+    )
+    $patient: Patient()
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G9191") ||
+        (
+            withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_4008F_2P") &&
+            codeModifiers contains '2P'
+        )
+    )
+then
+    insert(new Mips007Exception2());
+end
+
+rule 'Year2019.Mips007.Exception3'
+when
+    EncounterDenominator(
+        $program: program,
+        $encounter: clinicalActivity,
+        measure == 'Year2019.Mips007Rate1' ||
+        measure == 'Year2019.Mips007Rate2'
+    )
+    $patient: Patient()
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G9192") ||
+        (
+            withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_4008F_3P") &&
+            codeModifiers contains '3P'
+        )
+    )
+then
+    insert(new Mips007Exception3());
+end

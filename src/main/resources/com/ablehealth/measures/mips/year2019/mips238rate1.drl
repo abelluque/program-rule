@@ -1,0 +1,133 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+declare OrgHighRiskMedicationWithDaysSuppliedCriteria
+end
+
+declare ProviderHighRiskMedicationWithDaysSuppliedCriteria
+    providerMedication: Medication
+end
+
+rule 'Year2019.Mips238Rate1.OrgHighRiskMedications'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips238Rate1')
+    $orgMedication: Medication(
+        startsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "HIGH_RISK_MEDICATIONS_WITH_DAYS_SUPPLY_CRITERIA") ||
+        withValueSet("NcqaYear2019", "HIGH_RISK_MEDICATIONS_WITH_DAYS_SUPPLY_CRITERIA_MEDICATIONS"),
+        prescribed == true
+    )
+    accumulate(
+        $m: Medication(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "HIGH_RISK_MEDICATIONS_WITH_DAYS_SUPPLY_CRITERIA") ||
+            withValueSet("NcqaYear2019", "HIGH_RISK_MEDICATIONS_WITH_DAYS_SUPPLY_CRITERIA_MEDICATIONS"),
+            prescribed == true
+        );
+        $totalDays: sum($m.totalDaysSupplied($program.measurementPeriodEndDate));
+        $totalDays > 90
+    )
+then
+    insert(new OrgHighRiskMedicationWithDaysSuppliedCriteria());
+end
+
+rule 'Year2019.Mips238Rate1.ProviderHighRiskMedications'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips238Rate1')
+    $providerMedication: Medication(
+        startsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "HIGH_RISK_MEDICATIONS_WITH_DAYS_SUPPLY_CRITERIA") ||
+        withValueSet("NcqaYear2019", "HIGH_RISK_MEDICATIONS_WITH_DAYS_SUPPLY_CRITERIA_MEDICATIONS"),
+        prescribed == true,
+        providerExternalId == $encounter.providerExternalId
+    )
+    accumulate(
+        $m: Medication(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "HIGH_RISK_MEDICATIONS_WITH_DAYS_SUPPLY_CRITERIA") ||
+            withValueSet("NcqaYear2019", "HIGH_RISK_MEDICATIONS_WITH_DAYS_SUPPLY_CRITERIA_MEDICATIONS"),
+            prescribed == true,
+            providerExternalId == $providerMedication.providerExternalId
+        );
+        $totalDays: sum($m.totalDaysSupplied($program.measurementPeriodEndDate));
+        $totalDays > 90
+    )
+then
+    insert(new ProviderHighRiskMedicationWithDaysSuppliedCriteria($providerMedication));
+end
+
+rule 'Year2019.Mips238Rate1.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips238Rate1')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_238_ENCOUNTER")
+    )
+    Patient(getAgeInYearsAt($encounter.startDate) >= 66)
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips238Rate1'));
+end
+
+rule 'Year2019.Mips238Rate1.Success.G9365.Org'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips238Rate1')
+    $patient: Patient()
+    (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_G9365")
+        )
+        or exists Medication(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "HIGH_RISK_MEDICATIONS_FOR_THE_ELDERLY") ||
+            withValueSet("AbleYear2019", "HIGH_RISK_MEDICATIONS_FOR_THE_ELDERLY") ||
+            withValueSet("NcqaYear2019", "HIGH_RISK_MEDICATIONS"),
+            prescribed == true
+        )
+        or exists OrgHighRiskMedicationWithDaysSuppliedCriteria()
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips238Rate1', MeasureStatusValue.SUCCESS, "G9365");
+end
+
+rule 'Year2019.Mips238Rate1.Success.G9365.Provider'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips238Rate1')
+    $patient: Patient()
+    (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_G9365")
+        )
+        or exists Medication(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "HIGH_RISK_MEDICATIONS_FOR_THE_ELDERLY") ||
+            withValueSet("AbleYear2019", "HIGH_RISK_MEDICATIONS_FOR_THE_ELDERLY") ||
+            withValueSet("NcqaYear2019", "HIGH_RISK_MEDICATIONS"),
+            prescribed == true,
+            providerExternalId == $encounter.providerExternalId
+        )
+        or (
+            ProviderHighRiskMedicationWithDaysSuppliedCriteria(
+                $providerMedication: providerMedication;
+                $providerMedication.providerExternalId == $encounter.providerExternalId
+            )
+        )
+    )
+then
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips238Rate1', MeasureStatusValue.SUCCESS, 'G9365');
+end
+
+rule 'Year2019.Mips238Rate1.Gap.G9366'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips238Rate1')
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips238Rate1', MeasureStatusValue.GAP, 'G9366');
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips238Rate1', MeasureStatusValue.GAP, 'G9366');
+end

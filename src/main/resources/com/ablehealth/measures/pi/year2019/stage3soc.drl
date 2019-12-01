@@ -1,0 +1,43 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import java.util.Collection;
+
+global PatientResults controlSet;
+global Collection<Provider> providers;
+
+rule 'Year2019.Stage3soc.Denominator'
+when
+    $program: Program(rules contains 'measure.Pi.2019.Stage3soc')
+    $referral: Referral(
+        startsDuring($program.piMeasurementPeriod)
+    )
+then
+    insert(new EncounterDenominator($program, $referral, 'Year2019.Stage3soc'));
+end
+
+rule 'Year2019.Stage3soc.Success.performance_met'
+when
+    EncounterDenominator($program: program, $referral: referral, measure == 'Year2019.Stage3soc')
+    exists SystemEvent(
+        startsDuringYear($program.piMeasurementPeriod),
+        referralExternalId == $referral.externalId,
+        eventType == "SUMMARY_OF_CARE_CREATION_AND_EXCHANGE"
+    ) and exists SystemEvent(
+       startsDuringYear($program.piMeasurementPeriod),
+       referralExternalId == $referral.externalId,
+       eventType == "SUMMARY_OF_CARE_RECEIPT"
+    )
+then
+    controlSet.addEncounterMeasureStatusesForMatchingProviders($program, $referral, 'Year2019.Stage3soc', MeasureStatusValue.SUCCESS, "performance_met", providers);
+end
+
+rule 'Year2019.Stage3soc.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $referral: referral, measure == 'Year2019.Stage3soc')
+then
+    controlSet.addEncounterMeasureStatusesForMatchingProviders($program, $referral, 'Year2019.Stage3soc', MeasureStatusValue.GAP, "performance_not_met", providers);
+end

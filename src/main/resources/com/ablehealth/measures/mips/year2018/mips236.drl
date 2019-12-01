@@ -1,0 +1,235 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import accumulate com.ablehealth.functions.LatestClinicalActivityWithLowestResultAccumulateFunction latestClinicalActivityWithLowestResult;
+
+import java.time.temporal.ChronoUnit;
+
+global PatientResults controlSet;
+
+rule 'Year2018.Mips236.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2018.Mips236')
+    $mips236encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2018", "MIPS_236_ENCOUNTER")
+    )
+    exists Diagnosis(
+        withValueSet("MipsYear2018", "HYPERTENSION"),
+        startsBefore($program.measurementPeriod.end.minusMonths(6))
+    )
+    Patient(
+        getAgeInYearsAt($mips236encounter.startDate) >= 18 && <= 84
+    )
+then
+    insert(new EncounterDenominator($program, $mips236encounter, 'Year2018.Mips236'));
+end
+
+rule 'Year2018.Mips236.Success.G8752-G8754'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips236')
+    $patient: Patient()
+    (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("MipsYear2018", "PERFORMANCE_MET_G8752")
+        )
+        or exists ClinicalActivity(resultAsDecimal < 140) from accumulate (
+            $c: ClinicalActivity(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2018", "SYSTOLIC_BLOOD_PRESSURE")
+            ),
+            latestClinicalActivityWithLowestResult($c)
+        )
+    )
+    (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("MipsYear2018", "PERFORMANCE_MET_G8754")
+        )
+        or exists ClinicalActivity(resultAsDecimal < 90) from accumulate (
+            $c: ClinicalActivity(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2018", "DIASTOLIC_BLOOD_PRESSURE")
+            ),
+            latestClinicalActivityWithLowestResult($c)
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips236', MeasureStatusValue.SUCCESS, 'G8752-G8754');
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips236', MeasureStatusValue.SUCCESS, 'G8752-G8754');
+end
+
+rule 'Year2018.Mips236.Exclusion.exclusion_1'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips236')
+    $patient: Patient()
+    exists ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2018", "MIPS_HOSPICE_SERVICE") || withValueSet("VsacYear2018", "PALLIATIVE_CARE")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips236', MeasureStatusValue.EXCLUSION, 'exclusion_1');
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips236', MeasureStatusValue.EXCLUSION, 'exclusion_1');
+end
+
+rule 'Year2018.Mips236.Exclusion.exclusion_2'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips236')
+    $patient: Patient()
+    (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("MipsYear2018", "CLINICAL_EXCLUSION_G9231")
+        ) or
+        exists Diagnosis(
+            startsDuring($program.measurementPeriod),
+            (withValueSet("VsacYear2018", "END_STAGE_RENAL_DISEASE") || withValueSet("VsacYear2018", "CHRONIC_KIDNEY_DISEASE_STAGE_5"))
+        ) or
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            (
+                withValueSet("VsacYear2018", "VASCULAR_ACCESS_FOR_DIALYSIS") ||
+                withValueSet("VsacYear2018", "ESRD_MONTHLY_OUTPATIENT_SERVICES") ||
+                withValueSet("VsacYear2018", "KIDNEY_TRANSPLANT") ||
+                withValueSet("VsacYear2018", "DIALYSIS_SERVICES") ||
+                withValueSet("VsacYear2018", "OTHER_SERVICES_RELATED_TO_DIALYSIS") ||
+                withValueSet("VsacYear2018", "DIALYSIS_EDUCATION")
+            )
+        ) or
+        exists Diagnosis(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2018", "PREGNANCY")
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips236', MeasureStatusValue.EXCLUSION, 'exclusion_2');
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips236', MeasureStatusValue.EXCLUSION, 'exclusion_2');
+end
+
+rule 'Year2018.Mips236.Exclusion.exclusion_3'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips236')
+    $patient: Patient()
+    exists ClinicalActivity(
+        $patient.dateOfBirth.until(startDate, ChronoUnit.YEARS) >= 65,
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2018", "INSTITUTIONAL_EXCLUSION") ||
+        (
+            withValueSet("VsacYear2018", "CARE_SERVICES_IN_LONG_TERM_RESIDENTIAL_FACILITY") &&
+            placeOfService in ('32', '33', '34', '54', '56')
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips236', MeasureStatusValue.EXCLUSION, 'exclusion_3');
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips236', MeasureStatusValue.EXCLUSION, 'exclusion_3');
+end
+
+rule 'Year2018.Mips236.Gaps.G8752-G8755'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips236')
+    $patient: Patient()
+    (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("MipsYear2018", "PERFORMANCE_MET_G8752")
+        )
+        or exists ClinicalActivity(resultAsDecimal < 140) from accumulate (
+            $c: ClinicalActivity(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2018", "SYSTOLIC_BLOOD_PRESSURE")
+            ),
+            latestClinicalActivityWithLowestResult($c)
+        )
+    )
+    (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("MipsYear2018", "PERFORMANCE_NOT_MET_G8755")
+        )
+        or exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2018", "DIASTOLIC_BLOOD_PRESSURE"),
+            resultAsDecimal != null
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips236', MeasureStatusValue.GAP, 'G8752-G8755');
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips236', MeasureStatusValue.GAP, 'G8752-G8755');
+end
+
+rule 'Year2018.Mips236.Gaps.G8753-G8754'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips236')
+    $patient: Patient()
+    (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("MipsYear2018", "PERFORMANCE_NOT_MET_G8753")
+        )
+        or exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2018", "SYSTOLIC_BLOOD_PRESSURE"),
+            resultAsDecimal != null
+        )
+    )
+    (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("MipsYear2018", "PERFORMANCE_MET_G8754")
+        )
+        or exists ClinicalActivity(resultAsDecimal < 90) from accumulate (
+            $c: ClinicalActivity(
+                startsDuring($program.measurementPeriod),
+                withValueSet("VsacYear2018", "DIASTOLIC_BLOOD_PRESSURE")
+            ),
+            latestClinicalActivityWithLowestResult($c)
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips236', MeasureStatusValue.GAP, 'G8753-G8754');
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips236', MeasureStatusValue.GAP, 'G8753-G8754');
+end
+
+rule 'Year2018.Mips236.Gaps.G8753-G8755'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips236')
+    $patient: Patient()
+    (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("MipsYear2018", "PERFORMANCE_NOT_MET_G8753")
+        )
+        or exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2018", "SYSTOLIC_BLOOD_PRESSURE"),
+            resultAsDecimal != null
+        )
+    )
+    (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("MipsYear2018", "PERFORMANCE_NOT_MET_G8755")
+        )
+        or exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2018", "DIASTOLIC_BLOOD_PRESSURE"),
+            resultAsDecimal != null
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips236', MeasureStatusValue.GAP, 'G8753-G8755');
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips236', MeasureStatusValue.GAP, 'G8753-G8755');
+end
+
+rule 'Year2018.Mips236.Gaps.G8756'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips236')
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips236', MeasureStatusValue.GAP, 'G8756');
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips236', MeasureStatusValue.GAP, 'G8756');
+end

@@ -1,0 +1,107 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2018.Mips110.Denominator'
+when
+  $program: Program(rules contains 'measure.Mips.2018.Mips110')
+  $encounter: ClinicalActivity(
+    (
+      placeOfService != '02' &&
+      codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95' &&
+      withValueSet("MipsYear2018", "MIPS_110_ENCOUNTER")
+    ) &&
+    (
+      startsDuring($program.measurementPeriod.start,$program.measurementPeriod.start.plusMonths(3).minusDays(1)) ||
+      startsDuring($program.measurementPeriod.end.minusMonths(3).plusDays(1),$program.measurementPeriod.end)
+    )
+  )
+  $patient: Patient(getAgeInMonthsAt($encounter.startDate) >= 6)
+then
+  insert(new EncounterDenominator($program, $encounter, 'Year2018.Mips110'));
+end
+
+rule 'Year2018.Mips110.Success.G8482'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips110')
+  $patient: Patient()
+  (
+    (
+      $encounterDuringFirstPeriod: ClinicalActivity(
+        startsDuring($program.measurementPeriod.start,$program.measurementPeriod.start.plusMonths(3).minusDays(1)),
+        placeOfService != '02',
+        codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+        withValueSet("MipsYear2018", "MIPS_110_ENCOUNTER")
+      )
+      and exists Patient(getAgeInMonthsAt($encounterDuringFirstPeriod.startDate) >= 6)
+      and (
+        exists ClinicalActivity(
+          startsDuring($program.measurementPeriod.start.minusMonths(5),$program.measurementPeriod.start.plusMonths(3).minusDays(1)),
+          withValueSet("MipsYear2018", "PERFORMANCE_MET_G8482") || withValueSet("VsacYear2018", "INFLUENZA_VACCINATION") || withValueSet("VsacYear2018", "PREVIOUS_RECEIPT_OF_INFLUENZA_VACCINE")
+        )
+        or exists Medication(
+          startsDuring($program.measurementPeriod.start.minusMonths(5),$program.measurementPeriod.start.plusMonths(3).minusDays(1)),
+          withValueSet("VsacYear2018", "INFLUENZA_VACCINE")
+        )
+      )
+    )
+    or (
+      $encounterDuringSecondPeriod: ClinicalActivity(
+        startsDuring($program.measurementPeriod.end.minusMonths(3).plusDays(1),$program.measurementPeriod.end),
+        placeOfService != '02',
+        codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+        withValueSet("MipsYear2018", "MIPS_110_ENCOUNTER")
+      )
+      and exists Patient(getAgeInMonthsAt($encounterDuringSecondPeriod.startDate) >= 6)
+      and (
+        exists ClinicalActivity(
+          startsDuring($program.measurementPeriod.end.minusMonths(5).plusDays(1),$program.measurementPeriod.end),
+          withValueSet("MipsYear2018", "PERFORMANCE_MET_G8482") || withValueSet("VsacYear2018", "INFLUENZA_VACCINATION") || withValueSet("VsacYear2018", "PREVIOUS_RECEIPT_OF_INFLUENZA_VACCINE")
+        )
+        or exists Medication(
+          startsDuring($program.measurementPeriod.end.minusMonths(5).plusDays(1),$program.measurementPeriod.end),
+          withValueSet("VsacYear2018", "INFLUENZA_VACCINE")
+        )
+      )
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips110', MeasureStatusValue.SUCCESS, "G8482");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips110', MeasureStatusValue.SUCCESS, "G8482");
+end
+
+rule 'Year2018.Mips110.Exception.G8483'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips110')
+  $patient: Patient()
+  (
+    exists ClinicalActivity(
+      startsDuring($encounter),
+      withValueSet("MipsYear2018", "DENOMINATOR_EXCEPTION_G8483") || withValueSet("VsacYear2018", "INFLUENZA_VACCINATION_DECLINED")
+    )
+    or exists Diagnosis(
+      overlaps($encounter),
+      withValueSet("VsacYear2018", "ALLERGY_TO_INFLUENZA_VACCINE") || withValueSet("VsacYear2018", "INTOLERANCE_TO_INFLUENZA_VACCINE") || withValueSet("VsacYear2018", "ALLERGY_TO_EGGS")
+    )
+    or exists Allergy(
+      overlaps($encounter),
+      withValueSet("VsacYear2018", "INFLUENZA_VACCINE") || withValueSet("AbleYear2018", "INFLUENZA_VACCINE_NDFRT")
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips110', MeasureStatusValue.EXCEPTION, "G8483");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips110', MeasureStatusValue.EXCEPTION, "G8483");
+end
+
+rule 'Year2018.Mips110.Gap.G8484'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips110')
+  $patient: Patient()
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips110', MeasureStatusValue.GAP, "G8484");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips110', MeasureStatusValue.GAP, "G8484");
+end

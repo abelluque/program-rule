@@ -1,0 +1,36 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import java.util.Collection;
+
+global PatientResults controlSet;
+global Collection<Provider> providers;
+
+rule 'Year2019.Stage3epcontrolled.Denominator'
+when
+    $program: Program(rules contains 'measure.Pi.2019.Stage3epcontrolled')
+    $encounter: Medication(
+        startsDuring($program.piMeasurementPeriod),
+        prescribed == true
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Stage3epcontrolled'));
+end
+
+rule 'Year2019.Stage3epcontrolled.Success.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: medication, measure == 'Year2019.Stage3epcontrolled')
+    eval($encounter.prescriptionMethod != null && $encounter.prescriptionMethod.equals('electronic'))
+then
+    controlSet.addEncounterMeasureStatusesForMatchingProviders($program, $encounter, 'Year2019.Stage3epcontrolled', MeasureStatusValue.SUCCESS, "performance_met", providers);
+end
+
+rule 'Year2019.Stage3epcontrolled.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $encounter: medication, measure == 'Year2019.Stage3epcontrolled')
+then
+    controlSet.addEncounterMeasureStatusesForMatchingProviders($program, $encounter, 'Year2019.Stage3epcontrolled', MeasureStatusValue.GAP, "performance_not_met", providers);
+end

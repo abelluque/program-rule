@@ -1,0 +1,324 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+import com.ablehealth.helpers.*;
+
+import java.util.Collection;
+
+global PatientResults controlSet;
+global Collection<Provider> providers;
+
+rule 'Year2019.Stage3ppa.Denominator'
+when
+    $program: Program(rules contains 'measure.Pi.2019.Stage3ppa')
+    $encounter: Encounter(startsDuring($program.piMeasurementPeriod))
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Stage3ppa'));
+end
+
+rule 'Year2019.Stage3ppa.Success.Org.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: encounter, measure == 'Year2019.Stage3ppa')
+    $patient: Patient()
+    (
+        // At least one valid provisioning event exists
+        $provisioning: SystemEvent(
+            eventType == "HEALTH_INFORMATION_PROVISIONING",
+            startsDuring($program.piMeasurementPeriod),
+            endsDuringYear($program.piMeasurementPeriod),
+            endsOnOrBefore(startDatetime.plusHours(48)),
+            encounterExternalId == $encounter.externalId
+        )
+        and
+        exists SystemEvent(
+            eventType == "PORTAL_ACCESS",
+            startsDuringYear($program.piMeasurementPeriod) ||
+            startsBeforeYear($program.piMeasurementPeriod),
+            $provisioning.endsDuring(startDatetime, stopDatetime) || (
+                startsOnOrBefore($provisioning.startDatetime.plusHours(48)) &&
+                (stopDatetime == null || endsOnOrAfter($provisioning.startDatetime.plusHours(48)))
+            )
+        )
+        and exists SystemEvent(
+            eventType == "API_ACCESS_OPT_IN" ||
+            eventType == "API_ACCESS_OPT_OUT",
+            startsDuringYear($program.piMeasurementPeriod) ||
+            startsBeforeYear($program.piMeasurementPeriod),
+            $provisioning.endsDuring(startDatetime, stopDatetime) || (
+                startsOnOrBefore($provisioning.startDatetime.plusHours(48)) &&
+                (stopDatetime == null || endsOnOrAfter($provisioning.startDatetime.plusHours(48)))
+            )
+        )
+    )
+    not(
+        // No encounter exists with...
+        $encounterInYear: Encounter(
+            startsDuring($program.piMeasurementPeriod)
+        )
+        and (
+            // ...no provisioning event
+            not SystemEvent(
+                eventType == "HEALTH_INFORMATION_PROVISIONING",
+                startsDuring($program.piMeasurementPeriod),
+                endsDuringYear($program.piMeasurementPeriod),
+                endsOnOrBefore(startDatetime.plusHours(48)),
+                encounterExternalId == $encounterInYear.externalId
+            )
+            // ...an invalid provisioning event
+            or exists SystemEvent(
+                eventType == "HEALTH_INFORMATION_PROVISIONING" &&
+                startsDuring($program.piMeasurementPeriod) &&
+                encounterExternalId == $encounterInYear.externalId &&
+                (
+                    stopDatetime == null ||
+                    (
+                        endsDuringYear($program.piMeasurementPeriod) &&
+                        endsAfter(startDatetime.plusHours(48))
+                    ) ||
+                    false==endsDuringYear($program.piMeasurementPeriod)
+                )
+            )
+            // ...or a valid provisioning event with no portal or API access
+            or (
+                $provisioningForAllEncounters: SystemEvent(
+                    eventType == "HEALTH_INFORMATION_PROVISIONING",
+                    startsDuring($program.piMeasurementPeriod),
+                    endsDuringYear($program.piMeasurementPeriod),
+                    endsOnOrBefore(startDatetime.plusHours(48)),
+                    encounterExternalId == $encounterInYear.externalId
+                )
+                and (
+                    not SystemEvent(
+                        eventType == "PORTAL_ACCESS",
+                        startsDuringYear($program.piMeasurementPeriod) ||
+                        startsBeforeYear($program.piMeasurementPeriod),
+                        $provisioningForAllEncounters.endsDuring(startDatetime, stopDatetime) || (
+                            startsOnOrBefore($provisioningForAllEncounters.startDatetime.plusHours(48)) &&
+                            (stopDatetime == null || endsOnOrAfter($provisioningForAllEncounters.startDatetime.plusHours(48)))
+                        )
+                    )
+                    or not SystemEvent(
+                            eventType == "API_ACCESS_OPT_IN" ||
+                            eventType == "API_ACCESS_OPT_OUT",
+                            startsDuringYear($program.piMeasurementPeriod) ||
+                            startsBeforeYear($program.piMeasurementPeriod),
+                            $provisioningForAllEncounters.endsDuring(startDatetime, stopDatetime) || (
+                                startsOnOrBefore($provisioningForAllEncounters.startDatetime.plusHours(48)) &&
+                                (stopDatetime == null || endsOnOrAfter($provisioningForAllEncounters.startDatetime.plusHours(48)))
+                            )
+                    )
+                )
+            )
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Stage3ppa', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Stage3ppa.Success.Provider.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: encounter, measure == 'Year2019.Stage3ppa')
+    $patient: Patient()
+    (
+        // At least one valid provisioning event exists
+        $provisioning: SystemEvent(
+            eventType == "HEALTH_INFORMATION_PROVISIONING",
+            startsDuring($program.piMeasurementPeriod),
+            endsDuringYear($program.piMeasurementPeriod),
+            endsOnOrBefore(startDatetime.plusHours(48)),
+            encounterExternalId == $encounter.externalId
+        )
+        and
+        exists SystemEvent(
+            eventType == "PORTAL_ACCESS",
+            startsDuringYear($program.piMeasurementPeriod) ||
+            startsBeforeYear($program.piMeasurementPeriod),
+            $provisioning.endsDuring(startDatetime, stopDatetime) || (
+                startsOnOrBefore($provisioning.startDatetime.plusHours(48)) &&
+                (stopDatetime == null || endsOnOrAfter($provisioning.startDatetime.plusHours(48)))
+            )
+        )
+        and exists SystemEvent(
+              eventType == "API_ACCESS_OPT_IN" ||
+              eventType == "API_ACCESS_OPT_OUT",
+              startsDuringYear($program.piMeasurementPeriod) ||
+              startsBeforeYear($program.piMeasurementPeriod),
+              $provisioning.endsDuring(startDatetime, stopDatetime) || (
+                  startsOnOrBefore($provisioning.startDatetime.plusHours(48)) &&
+                  (stopDatetime == null || endsOnOrAfter($provisioning.startDatetime.plusHours(48)))
+              )
+        )
+    )
+    not(
+        // No encounter exists with...
+        $encounterInYear: Encounter(
+            startsDuring($program.piMeasurementPeriod),
+            providerHasSameNpiAsOtherEncounterableProvider($encounter.providerExternalId, providers)
+        )
+        and (
+            // ...no provisioning event
+            not SystemEvent(
+                eventType == "HEALTH_INFORMATION_PROVISIONING",
+                startsDuring($program.piMeasurementPeriod),
+                endsDuringYear($program.piMeasurementPeriod),
+                endsOnOrBefore(startDatetime.plusHours(48)),
+                encounterExternalId == $encounterInYear.externalId
+            )
+            // ...an invalid provisioning event
+            or exists SystemEvent(
+                eventType == "HEALTH_INFORMATION_PROVISIONING" &&
+                startsDuring($program.piMeasurementPeriod) &&
+                encounterExternalId == $encounterInYear.externalId &&
+                (
+                    stopDatetime == null ||
+                    (
+                        endsDuringYear($program.piMeasurementPeriod) &&
+                        endsAfter(startDatetime.plusHours(48))
+                    ) ||
+                    false==endsDuringYear($program.piMeasurementPeriod)
+                )
+            )
+            // ...or a valid provisioning event with no portal or API access
+            or (
+                $provisioningForAllEncounters: SystemEvent(
+                    eventType == "HEALTH_INFORMATION_PROVISIONING",
+                    startsDuring($program.piMeasurementPeriod),
+                    endsDuringYear($program.piMeasurementPeriod),
+                    endsOnOrBefore(startDatetime.plusHours(48)),
+                    encounterExternalId == $encounterInYear.externalId
+                )
+                and (
+                    not SystemEvent(
+                        eventType == "PORTAL_ACCESS",
+                        startsDuringYear($program.piMeasurementPeriod) ||
+                        startsBeforeYear($program.piMeasurementPeriod),
+                        $provisioningForAllEncounters.endsDuring(startDatetime, stopDatetime) || (
+                            startsOnOrBefore($provisioningForAllEncounters.startDatetime.plusHours(48)) &&
+                            (stopDatetime == null || endsOnOrAfter($provisioningForAllEncounters.startDatetime.plusHours(48)))
+                        )
+                    )
+                    or not SystemEvent(
+                        eventType == "API_ACCESS_OPT_IN" ||
+                        eventType == "API_ACCESS_OPT_OUT",
+                        startsDuringYear($program.piMeasurementPeriod) ||
+                        startsBeforeYear($program.piMeasurementPeriod),
+                        $provisioningForAllEncounters.endsDuring(startDatetime, stopDatetime) || (
+                            startsOnOrBefore($provisioningForAllEncounters.startDatetime.plusHours(48)) &&
+                            (stopDatetime == null || endsOnOrAfter($provisioningForAllEncounters.startDatetime.plusHours(48)))
+                        )
+                    )
+                )
+            )
+        )
+    )
+then
+    controlSet.addProviderPatientMeasureStatusesForMatchingProviders($program, $patient, $encounter.providerExternalId,'Year2019.Stage3ppa', MeasureStatusValue.SUCCESS, "performance_met", providers);
+end
+
+rule 'Year2019.Stage3ppa.Success.Group.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: encounter, measure == 'Year2019.Stage3ppa')
+    $patient: Patient()
+    (
+        // At least one valid provisioning event exists
+        $provisioning: SystemEvent(
+            eventType == "HEALTH_INFORMATION_PROVISIONING",
+            startsDuring($program.piMeasurementPeriod),
+            endsDuringYear($program.piMeasurementPeriod),
+            endsOnOrBefore(startDatetime.plusHours(48)),
+            encounterExternalId == $encounter.externalId
+        )
+        and
+        exists SystemEvent(
+            eventType == "PORTAL_ACCESS",
+            startsDuringYear($program.piMeasurementPeriod),
+            $provisioning.endsDuring(startDatetime, stopDatetime) || (
+                startsOnOrBefore($provisioning.startDatetime.plusHours(48)) &&
+                (stopDatetime == null || endsOnOrAfter($provisioning.startDatetime.plusHours(48)))
+            )
+        )
+        and exists SystemEvent(
+              eventType == "API_ACCESS_OPT_IN" ||
+              eventType == "API_ACCESS_OPT_OUT",
+              startsDuringYear($program.piMeasurementPeriod),
+              $provisioning.endsDuring(startDatetime, stopDatetime) || (
+                  startsOnOrBefore($provisioning.startDatetime.plusHours(48)) &&
+                  (stopDatetime == null || endsOnOrAfter($provisioning.startDatetime.plusHours(48)))
+              )
+        )
+    )
+    not(
+        // No encounter exists with...
+        $encounterInYear: Encounter(
+            startsDuring($program.piMeasurementPeriod),
+            groupExternalId == $encounter.groupExternalId
+        )
+        and (
+            // ...no provisioning event
+            not SystemEvent(
+                eventType == "HEALTH_INFORMATION_PROVISIONING",
+                startsDuring($program.piMeasurementPeriod),
+                endsDuringYear($program.piMeasurementPeriod),
+                endsOnOrBefore(startDatetime.plusHours(48)),
+                encounterExternalId == $encounterInYear.externalId
+            )
+            // ...an invalid provisioning event
+            or exists SystemEvent(
+                eventType == "HEALTH_INFORMATION_PROVISIONING" &&
+                startsDuring($program.piMeasurementPeriod) &&
+                encounterExternalId == $encounterInYear.externalId &&
+                (
+                    stopDatetime == null ||
+                    (
+                        endsDuringYear($program.piMeasurementPeriod) &&
+                        endsAfter(startDatetime.plusHours(48))
+                    ) ||
+                    false==endsDuringYear($program.piMeasurementPeriod)
+                )
+            )
+            // ...or a valid provisioning event with no portal or API access
+            or (
+                $provisioningForAllEncounters: SystemEvent(
+                    eventType == "HEALTH_INFORMATION_PROVISIONING",
+                    startsDuring($program.piMeasurementPeriod),
+                    endsDuringYear($program.piMeasurementPeriod),
+                    endsOnOrBefore(startDatetime.plusHours(48)),
+                    encounterExternalId == $encounterInYear.externalId
+                )
+                and (
+                    not SystemEvent(
+                        eventType == "PORTAL_ACCESS",
+                        startsDuringYear($program.piMeasurementPeriod),
+                        $provisioningForAllEncounters.endsDuring(startDatetime, stopDatetime) || (
+                            startsOnOrBefore($provisioningForAllEncounters.startDatetime.plusHours(48)) &&
+                            (stopDatetime == null || endsOnOrAfter($provisioningForAllEncounters.startDatetime.plusHours(48)))
+                        )
+                    )
+                    or not SystemEvent(
+                        eventType == "API_ACCESS_OPT_IN" ||
+                        eventType == "API_ACCESS_OPT_OUT",
+                        startsDuringYear($program.piMeasurementPeriod),
+                        $provisioningForAllEncounters.endsDuring(startDatetime, stopDatetime) || (
+                            startsOnOrBefore($provisioningForAllEncounters.startDatetime.plusHours(48)) &&
+                            (stopDatetime == null || endsOnOrAfter($provisioningForAllEncounters.startDatetime.plusHours(48)))
+                        )
+                    )
+                )
+            )
+        )
+    )
+then
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId, 'Year2019.Stage3ppa', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Stage3ppa.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $encounter: encounter, measure == 'Year2019.Stage3ppa')
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Stage3ppa', MeasureStatusValue.GAP, "performance_not_met");
+    controlSet.addProviderPatientMeasureStatusesForMatchingProviders($program, $patient, $encounter.providerExternalId,'Year2019.Stage3ppa', MeasureStatusValue.GAP, "performance_not_met", providers);
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId, 'Year2019.Stage3ppa', MeasureStatusValue.GAP, "performance_not_met");
+end

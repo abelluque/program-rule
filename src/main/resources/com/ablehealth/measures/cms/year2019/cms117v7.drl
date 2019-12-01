@@ -1,0 +1,568 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Cms117v7.Denominator'
+when
+    $program: Program(rules contains 'measure.Cms.2019.Cms117v7')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        endsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "OFFICE_VISIT") ||
+        withValueSet("VsacYear2019", "PREVENTIVE_CARE_ESTABLISHED_OFFICE_VISIT_0_TO_17") ||
+        withValueSet("VsacYear2019", "PREVENTIVE_CARE_SERVICES_INITIAL_OFFICE_VISIT_0_TO_17") ||
+        withValueSet("VsacYear2019", "HOME_HEALTHCARE_SERVICES")
+    )
+    exists Patient(
+        getAgeInYearsAt($program.measurementPeriod.start) >= 1
+        && getAgeInYearsAt($program.measurementPeriod.end) == 2
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Cms117v7'));
+end
+
+rule 'Year2019.Cms117v7.Exclusion.exclusion_hospice'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms117v7')
+    $patient: Patient()
+    (
+        exists ClinicalActivity(
+            endsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "ENCOUNTER_INPATIENT"),
+            withChildValueSet("VsacYear2019", "DISCHARGED_TO_HEALTH_CARE_FACILITY_FOR_HOSPICE_CARE") ||
+            withChildValueSet("VsacYear2019", "DISCHARGED_TO_HOME_FOR_HOSPICE_CARE")
+        )
+        or exists Order(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "HOSPICE_CARE_AMBULATORY")
+        )
+        or exists ClinicalActivity(
+            overlaps($program.measurementPeriod),
+            withValueSet("VsacYear2019", "HOSPICE_CARE_AMBULATORY")
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms117v7', MeasureStatusValue.EXCLUSION, "exclusion_hospice");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms117v7', MeasureStatusValue.EXCLUSION, "exclusion_hospice");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms117v7', MeasureStatusValue.EXCLUSION, "exclusion_hospice");
+end
+
+declare Cms1172019TotalPolioIPV
+	collectSet: Set
+end
+
+rule 'Year2019.Cms117v7.Cms1172019TotalPolioIPV'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms117v7')
+    $patient: Patient()
+	$polioIpvMedications: java.util.Set() from accumulate(
+		$medication: Medication(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(42)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "INACTIVATED_POLIO_VACCINE_IPV")
+        );
+		collectSet($medication.startDate.toString())
+	)
+	$polioIpvClinicalActivities: java.util.Set() from accumulate(
+		$clinicalActivity: ClinicalActivity(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(42)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "INACTIVATED_POLIO_VACCINE_IPV_ADMINISTERED")
+        );
+		collectSet($clinicalActivity.startDate.toString())
+	)
+then
+  insert(new Cms1172019TotalPolioIPV(new HashSet<String>() {{
+  	addAll($polioIpvMedications);
+  	addAll($polioIpvClinicalActivities);}}));
+end
+
+declare Cms1172019TotalDtap
+	collectSet: Set
+end
+
+rule 'Year2019.Cms117v7.Cms1172019TotalDtap'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms117v7')
+    $patient: Patient()
+	$dtapMedications: java.util.Set() from accumulate(
+		$medication: Medication(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(42)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "DTAP_VACCINE")
+        );
+		collectSet($medication.startDate.toString())
+	)
+	$dtapClinicalActivities: java.util.Set() from accumulate(
+		$clinicalActivity: ClinicalActivity(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(42)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "DTAP_VACCINE_ADMINISTERED")
+        );
+		collectSet($clinicalActivity.startDate.toString())
+	)
+then
+  insert(new Cms1172019TotalDtap(new HashSet<String>() {{
+  	addAll($dtapMedications);
+  	addAll($dtapClinicalActivities);}}));
+end
+
+declare Cms1172019TotalHib
+	collectSet: Set
+end
+
+rule 'Year2019.Cms117v7.Cms1172019TotalHib'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms117v7')
+    $patient: Patient()
+	$hibMedications: java.util.Set() from accumulate(
+		$medication: Medication(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(42)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "HAEMOPHILUS_INFLUENZAE_TYPE_B_HIB_VACCINE")
+        );
+		collectSet($medication.startDate.toString())
+	)
+	$hibClinicalActivities: java.util.Set() from accumulate(
+		$clinicalActivity: ClinicalActivity(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(42)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "HAEMOPHILUS_INFLUENZAE_TYPE_B_HIB_VACCINE_ADMINISTERED")
+        );
+		collectSet($clinicalActivity.startDate.toString())
+	)
+then
+  insert(new Cms1172019TotalHib(new HashSet<String>() {{
+  	addAll($hibMedications);
+  	addAll($hibClinicalActivities);}}));
+end
+
+declare Cms1172019TotalHepB
+	collectSet: Set
+end
+
+rule 'Year2019.Cms117v7.Cms1172019TotalHepB'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms117v7')
+    $patient: Patient()
+	$hepBMedications: java.util.Set() from accumulate(
+		$medication: Medication(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(42)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "HEPATITIS_B_VACCINE")
+        );
+		collectSet($medication.startDate.toString())
+	)
+	$hepBClinicalActivities: java.util.Set() from accumulate(
+		$clinicalActivity: ClinicalActivity(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(42)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "HEPATITIS_B_VACCINE_ADMINISTERED")
+        );
+		collectSet($clinicalActivity.startDate.toString())
+	)
+then
+  insert(new Cms1172019TotalHepB(new HashSet<String>() {{
+  	addAll($hepBMedications);
+  	addAll($hepBClinicalActivities);}}));
+end
+
+declare Cms1172019TotalPneumococcal
+	collectSet: Set
+end
+
+rule 'Year2019.Cms117v7.Cms1172019TotalPneumococcal'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms117v7')
+    $patient: Patient()
+	$pneumococcalMedications: java.util.Set() from accumulate(
+		$medication: Medication(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(42)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "PNEUMOCOCCAL_CONJUGATE_VACCINE")
+        );
+		collectSet($medication.startDate.toString())
+	)
+	$pneumococcalClinicalActivities: java.util.Set() from accumulate(
+		$clinicalActivity: ClinicalActivity(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(42)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "PNEUMOCOCCAL_CONJUGATE_VACCINE_ADMINISTERED")
+        );
+		collectSet($clinicalActivity.startDate.toString())
+	)
+then
+  insert(new Cms1172019TotalPneumococcal(new HashSet<String>() {{
+  	addAll($pneumococcalMedications);
+  	addAll($pneumococcalClinicalActivities);}}));
+end
+
+declare Cms1172019TotalInfluenza
+	collectSet: Set
+end
+
+rule 'Year2019.Cms117v7.Cms1172019TotalInfluenza'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms117v7')
+    $patient: Patient()
+	$influenzaMedications: java.util.Set() from accumulate(
+		$medication: Medication(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(180)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "INFLUENZA_VACCINE")
+        );
+		collectSet($medication.startDate.toString())
+	)
+	$influenzaClinicalActivities: java.util.Set() from accumulate(
+		$clinicalActivity: ClinicalActivity(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(180)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "INFLUENZA_VACCINE_ADMINISTERED")
+        );
+		collectSet($clinicalActivity.startDate.toString())
+	)
+then
+  insert(new Cms1172019TotalInfluenza(new HashSet<String>() {{
+  	addAll($influenzaMedications);
+  	addAll($influenzaClinicalActivities);}}));
+end
+
+declare Cms1172019TotalRotavirus2
+	collectSet: Set
+end
+
+rule 'Year2019.Cms117v7.Cms1172019TotalRotavirus2'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms117v7')
+    $patient: Patient()
+	$rotavirus2Medications: java.util.Set() from accumulate(
+		$medication: Medication(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(42)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "ROTAVIRUS_LIVE_MONOVALENT_VACCINE")
+        );
+		collectSet($medication.startDate.toString())
+	)
+	$rotavirus2ClinicalActivities: java.util.Set() from accumulate(
+		$clinicalActivity: ClinicalActivity(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(42)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "ROTAVIRUS_VACCINE_HUMAN_ATTENUATED_RV1_2_DOSE_SCHEDULE_LIVE_FOR_ORAL_USE")
+        );
+		collectSet($clinicalActivity.startDate.toString())
+	)
+then
+  insert(new Cms1172019TotalRotavirus2(new HashSet<String>() {{
+  	addAll($rotavirus2Medications);
+  	addAll($rotavirus2ClinicalActivities);}}));
+end
+
+declare Cms1172019TotalRotavirus2or3
+	collectSet: Set
+end
+
+rule 'Year2019.Cms117v7.Cms1172019TotalRotavirus2or3'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms117v7')
+    $patient: Patient()
+	$rotavirus2or3Medications: java.util.Set() from accumulate(
+		$medication: Medication(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(42)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "ROTAVIRUS_LIVE_MONOVALENT_VACCINE") ||
+            withValueSet("VsacYear2019", "ROTAVIRUS_VACCINE_3_DOSE_SCHEDULE")
+        );
+		collectSet($medication.startDate.toString())
+	)
+	$rotavirus2or3ClinicalActivities: java.util.Set() from accumulate(
+		$clinicalActivity: ClinicalActivity(
+            startsOnOrAfter(
+                $patient.dateOfBirth.plusDays(42)
+            ),
+            startsOnOrBefore(
+                $patient.dateOfBirth.plusDays(730)
+            ),
+            withValueSet("VsacYear2019", "ROTAVIRUS_VACCINE_HUMAN_ATTENUATED_RV1_2_DOSE_SCHEDULE_LIVE_FOR_ORAL_USE") ||
+            withValueSet("VsacYear2019", "ROTAVIRUS_VACCINE_PENTAVALENT_RV5_3_DOSE_SCHEDULE_LIVE_FOR_ORAL_USE")
+        );
+		collectSet($clinicalActivity.startDate.toString())
+	)
+then
+  insert(new Cms1172019TotalRotavirus2or3(new HashSet<String>() {{
+  	addAll($rotavirus2or3Medications);
+  	addAll($rotavirus2or3ClinicalActivities);}}));
+end
+
+rule 'Year2019.Cms117v7.Success.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms117v7')
+    $patient: Patient()
+    (
+        (
+            Cms1172019TotalDtap(collectSet.size >= 4)
+            or exists Diagnosis(
+                startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                withValueSet("VsacYear2019", "ANAPHYLACTIC_REACTION_TO_DTAP_VACCINE") ||
+                withValueSet("VsacYear2019", "ENCEPHALOPATHY_DUE_TO_CHILDHOOD_VACCINATION")
+            )
+        ) and (
+            Cms1172019TotalPolioIPV(collectSet.size >= 3)
+            or exists Diagnosis(
+                startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                withValueSet("VsacYear2019", "POLIOMYELITIS_VACCINE_ADVERSE_REACTION_DISORDER") ||
+                withValueSet("VsacYear2019", "STREPTOMYCIN_ADVERSE_REACTION_DISORDER") ||
+                withValueSet("VsacYear2019", "POLYMYXIN_B_ADVERSE_REACTION_DISORDER") ||
+                withValueSet("VsacYear2019", "NEOMYCIN_ADVERSE_REACTION_DISORDER")
+            )
+        )
+        and
+        (
+            (
+                exists Medication(
+                    withValueSet("VsacYear2019", "MEASLES_MUMPS_AND_RUBELLA_MMR_VACCINE"),
+                    startsOnOrBefore($patient.dateOfBirth.plusDays(730))
+                ) or exists ClinicalActivity(
+                    withValueSet("VsacYear2019", "MEASLES_MUMPS_AND_RUBELLA_MMR_VACCINE_ADMINISTERED"),
+                    startsOnOrBefore($patient.dateOfBirth.plusDays(730))
+                )
+            )
+            or exists Diagnosis(
+                startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                withValueSet("VsacYear2019", "DISORDERS_OF_THE_IMMUNE_SYSTEM") ||
+                withValueSet("VsacYear2019", "HIV") ||
+                withValueSet("VsacYear2019", "MALIGNANT_NEOPLASM_OF_LYMPHATIC_AND_HEMATOPOIETIC_TISSUE") ||
+                withValueSet("VsacYear2019", "NEOMYCIN_ADVERSE_REACTION_DISORDER")
+            )
+            or (
+                (
+                    exists LaboratoryTestPerformed(
+                        startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                        withValueSet("VsacYear2019", "MEASLES_ANTIBODY_TEST_IGG_ANTIBODY_TITER"),
+                        resultAsDecimal >= 1.10
+                    )
+                    // or exists LaboratoryTestPerformed(
+                    //     startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                    //     withValueSet("VsacYear2019", "MEASLES_ANTIBODY_TEST_IGG_ANTIBODY_PRESENCE"),
+                    //     withChildValueSet("VsacYear2019", "POSITIVE_FINDING")
+                    // )
+                    or exists Diagnosis(
+                        startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                        withValueSet("VsacYear2019", "MEASLES")
+                    )
+                )
+                and (
+                    exists LaboratoryTestPerformed(
+                        startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                        withValueSet("VsacYear2019", "MUMPS_ANTIBODY_TEST_IGG_ANTIBODY_TITER"),
+                        resultAsDecimal >= 1.10
+                    )
+                    // or exists LaboratoryTestPerformed(
+                    //     startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                    //     withValueSet("VsacYear2019", "MUMPS_ANTIBODY_TEST_IGG_ANTIBODY_PRESENCE"),
+                    //     withChildValueSet("VsacYear2019", "POSITIVE_FINDING")
+                    // )
+                    or exists Diagnosis(
+                        startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                        withValueSet("VsacYear2019", "MUMPS")
+                    )
+                )
+                and (
+                    exists LaboratoryTestPerformed(
+                        startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                        withValueSet("VsacYear2019", "RUBELLA_ANTIBODY_TEST_IGG_ANTIBODY_TITER"),
+                        resultAsDecimal >= 1.10
+                    )
+                    // or exists LaboratoryTestPerformed(
+                    //     startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                    //     withValueSet("VsacYear2019", "RUBELLA_ANTIBODY_TEST_IGG_ANTIBODY_PRESENCE"),
+                    //     withChildValueSet("VsacYear2019", "POSITIVE_FINDING")
+                    // )
+                    or exists Diagnosis(
+                        startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                        withValueSet("VsacYear2019", "RUBELLA")
+                    )
+                )
+            )
+        )
+        and (
+            Cms1172019TotalHib(collectSet.size >= 3)
+            or exists Diagnosis(
+                startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                withValueSet("VsacYear2019", "ANAPHYLAXIS_DUE_TO_HAEMOPHILUS_INFLUENZAE_TYPE_B_VACCINE_DISORDER")
+            )
+        )
+        and (
+            Cms1172019TotalHepB(collectSet.size >= 3)
+            or (
+                // exists LaboratoryTestPerformed(
+                //     startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                //     withValueSet("VsacYear2019", "ANTI_HEPATITIS_B_VIRUS_SURFACE_AB"),
+                //     withChildValueSet("VsacYear2019", "POSTIVE_FINDING")
+                // )
+                exists Diagnosis(
+                    startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                    withValueSet("VsacYear2019", "ANAPHYLAXIS_DUE_TO_HEPATITIS_B_VACCINE_DISORDER") ||
+                    withValueSet("VsacYear2019", "ANAPHYLACTIC_REACTION_TO_COMMON_BAKER_S_YEAST") ||
+                    withValueSet("VsacYear2019", "HEPATITIS_B")
+                )
+            )
+        )
+         and (
+            Cms1172019TotalPneumococcal(collectSet.size >= 4)
+            or exists Diagnosis(
+                startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                withValueSet("VsacYear2019", "PNEUMOCOCCAL_VACCINE_ADVERSE_REACTION_DISORDER")
+            )
+        )
+        and (
+            (
+                exists Medication(
+                    withValueSet("VsacYear2019", "VARICELLA_ZOSTER_VACCINE_VZV"),
+                    startsOnOrBefore($patient.dateOfBirth.plusDays(730))
+                ) or exists ClinicalActivity(
+                    withValueSet("VsacYear2019", "VARICELLA_ZOSTER_VACCINE_VZV_ADMINISTERED"),
+                    startsOnOrBefore($patient.dateOfBirth.plusDays(730))
+                )
+            )
+            or (
+                exists LaboratoryTestPerformed(
+                    startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                    withValueSet("VsacYear2019", "VARICELLA_ZOSTER_ANTIBODY_TEST_IGG_ANTIBODY_TITER"),
+                    resultAsDecimal >= 1.10
+                )
+                // or exists LaboratoryTestPerformed(
+                //     startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                //     withValueSet("VsacYear2019", "VARICELLA_ZOSTER_ANTIBODY_TEST_IGG_ANTIBODY_PRESENCE"),
+                //     withChildValueSet("VsacYear2019", "POSITIVE_FINDING")
+                // )
+                or exists Diagnosis(
+                    startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                    withValueSet("VsacYear2019", "DISORDERS_OF_THE_IMMUNE_SYSTEM") ||
+                    withValueSet("VsacYear2019", "HIV") ||
+                    withValueSet("VsacYear2019", "MALIGNANT_NEOPLASM_OF_LYMPHATIC_AND_HEMATOPOIETIC_TISSUE") ||
+                    withValueSet("VsacYear2019", "NEOMYCIN_ADVERSE_REACTION_DISORDER") ||
+                    withValueSet("VsacYear2019", "VARICELLA_ZOSTER")
+                )
+            )
+        )
+        and (
+            (
+                exists Medication(
+                    withValueSet("VsacYear2019", "HEPATITIS_A_VACCINE"),
+                    startsOnOrBefore($patient.dateOfBirth.plusDays(730))
+                ) or exists ClinicalActivity(
+                    withValueSet("VsacYear2019", "HEPATITIS_A_VACCINE_ADMINISTERED"),
+                    startsOnOrBefore($patient.dateOfBirth.plusDays(730))
+                )
+            ) or (
+                // exists LaboratoryTestPerformed(
+                //         startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                //         withValueSet("VsacYear2019", "ANTI_HEPATITIS_A_IGG_ANTIGEN_TEST"),
+                //         withChildValueSet("VsacYear2019", "POSITIVE_FINDING")
+                // )
+                exists Diagnosis(
+                    startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                    withValueSet("VsacYear2019", "ANAPHYLACTIC_REACTION_TO_HEPATITIS_A_VACCINE") ||
+                    withValueSet("VsacYear2019", "HEPATITIS_A")
+                )
+            )
+        ) and (
+            Cms1172019TotalInfluenza(collectSet.size >= 2)
+            or exists Diagnosis(
+                startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                withValueSet("VsacYear2019", "INFLUENZA_VIRUS_VACCINE_ADVERSE_REACTION_DISORDER") ||
+                withValueSet("VsacYear2019", "DISORDERS_OF_THE_IMMUNE_SYSTEM") ||
+                withValueSet("VsacYear2019", "HIV") ||
+                withValueSet("VsacYear2019", "MALIGNANT_NEOPLASM_OF_LYMPHATIC_AND_HEMATOPOIETIC_TISSUE") ||
+                withValueSet("VsacYear2019", "NEOMYCIN_ADVERSE_REACTION_DISORDER")
+            )
+        ) and (
+            Cms1172019TotalRotavirus2(collectSet.size >= 2)
+            or Cms1172019TotalRotavirus2or3(collectSet.size >= 3)
+            or exists Diagnosis(
+                startsOnOrBefore($patient.dateOfBirth.plusDays(730)),
+                withValueSet("VsacYear2019", "ANAPHYLAXIS_DUE_TO_ROTAVIRUS_VACCINE_DISORDER") ||
+                withValueSet("VsacYear2019", "SEVERE_COMBINED_IMMUNODEFICIENCY") ||
+                withValueSet("VsacYear2019", "INTUSSUSCEPTION")
+            )
+        )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms117v7', MeasureStatusValue.SUCCESS, "performance_met");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms117v7', MeasureStatusValue.SUCCESS, "performance_met");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms117v7', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Cms117v7.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms117v7')
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms117v7', MeasureStatusValue.GAP, "performance_not_met");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms117v7', MeasureStatusValue.GAP, "performance_not_met");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms117v7', MeasureStatusValue.GAP, "performance_not_met");
+end

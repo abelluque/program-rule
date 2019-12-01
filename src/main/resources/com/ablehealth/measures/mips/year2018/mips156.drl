@@ -1,0 +1,49 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2018.Mips156.Denominator'
+when
+  $program: Program(rules contains 'measure.Mips.2018.Mips156')
+  $encounter: ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    withValueSet("MipsYear2018", "MIPS_156_PROCEDURE")
+  )
+  exists Diagnosis(
+    overlaps($encounter),
+    withValueSet("MipsYear2018", "MIPS_156_CANCER")
+  )
+  not Diagnosis(
+    overlaps($encounter),
+    withValueSet("MipsYear2018", "MIPS_156_METASTATIC_CANCER")
+  )
+then
+  insert(new EncounterDenominator($program, $encounter, 'Year2018.Mips156'));
+end
+
+rule 'Year2018.Mips156.Success.0520F'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips156')
+  $patient: Patient()
+  exists ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    withValueSet("MipsYear2018", "PERFORMANCE_MET_0520F"),
+    codeModifiers.isEmpty
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips156', MeasureStatusValue.SUCCESS, "0520F");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips156', MeasureStatusValue.SUCCESS, '0520F');
+end
+
+rule 'Year2018.Mips156.Gap.0520F-8P'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips156')
+  $patient: Patient()
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips156', MeasureStatusValue.GAP, "0520F-8P");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips156', MeasureStatusValue.GAP, '0520F-8P');
+end

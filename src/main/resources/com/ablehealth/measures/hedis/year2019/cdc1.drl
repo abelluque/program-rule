@@ -1,0 +1,40 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Cdc1.Success.performance_met'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cdc1')
+	(
+		(
+			exists ClinicalActivity(
+				startsDuring($program.measurementPeriod),
+				withValueSet("HedisYear2019", "HBA1C_TESTS")||
+				withValueSet("AbleYear2019", "HBA1C_LABORATORY_TEST")||
+				withValueSet("MipsYear2019", "PERFORMANCE_MET_3046F")||
+				withValueSet("MipsYear2019", "PERFORMANCE_NOT_MET_3045F")||
+				withValueSet("MipsYear2019", "PERFORMANCE_NOT_MET_3044F")
+			)
+		)
+		or (
+			exists LaboratoryTestPerformed(
+				startsDuring($program.measurementPeriod),
+				withValueSet("HedisYear2019", "HBA1C_TESTS")||
+				withValueSet("AbleYear2019", "HBA1C_LABORATORY_TEST")
+			)
+		)
+	)
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cdc1', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Cdc1.Gap.performance_not_met'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cdc1')
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cdc1', MeasureStatusValue.GAP, "performance_not_met");
+end

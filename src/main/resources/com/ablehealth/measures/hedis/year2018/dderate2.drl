@@ -1,0 +1,78 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+declare HedisDdeRate2Dementia
+    dementia: QdmDatatype
+end
+
+rule 'Year2018.Hedis.DdeRate2.DementiaDiagnosis'
+when
+    $program: Program(rules contains 'measure.Hedis.2018.DdeRate2')
+    $dementia: Diagnosis(
+        startsDuring($program.measurementPeriod.end.minusMonths(24).plusDays(1),$program.measurementPeriod.end.minusMonths(1)),
+        withValueSet("HedisYear2018", "DEMENTIA")
+    )
+then
+    insert(new HedisDdeRate2Dementia($dementia));
+end
+
+rule 'Year2018.Hedis.DdeRate2.DementiaMedication'
+when
+    $program: Program(rules contains 'measure.Hedis.2018.DdeRate2')
+    $dementia: Medication(
+        startsDuring($program.measurementPeriod.end.minusMonths(24).plusDays(1),$program.measurementPeriod.end.minusMonths(1)),
+        withValueSet("HedisYear2018", "DEMENTIA_MEDICATIONS"),
+        prescribed == true
+    )
+then
+    insert(new HedisDdeRate2Dementia($dementia));
+end
+
+rule 'Year2018.Hedis.DdeRate2.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2018.DdeRate2')
+    $patient: Patient(getAgeInYearsAt($program.measurementPeriod.end) >= 67)
+    HedisDdeRate2Dementia($dementia: dementia)
+    not ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2018", "MIPS_HOSPICE_SERVICE") || withValueSet("VsacYear2018", "PALLIATIVE_CARE")
+    )
+then
+    insert(new PatientDenominator($program, $patient, 'Year2018.DdeRate2'));
+end
+
+rule 'Year2018.Hedis.DdeRate2.ExclusionReasons.Exclusion1'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2018.DdeRate2')
+    exists Diagnosis(
+        overlaps($program.measurementPeriod.end.minusMonths(24).plusDays(1),$program.measurementPeriod.end.minusMonths(1)),
+        withValueSet("HedisYear2018", "PSYCHOSIS") || withValueSet("HedisYear2018", "SCHIZOPHRENIA") || withValueSet("HedisYear2018", "BIPOLAR_DISORDER") || withValueSet("HedisYear2018", "OTHER_BIPOLAR_DISORDER") || withValueSet("HedisYear2018", "SEIZURE_DISORDERS")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.DdeRate2', MeasureStatusValue.EXCLUSION, 'exclusion_1');
+end
+
+rule 'Year2018.Hedis.DdeRate2.SuccessReasons.PerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2018.DdeRate2')
+    HedisDdeRate2Dementia($dementia: dementia)
+    exists Medication(
+        startsDuring($dementia.start,$program.measurementPeriod.end),
+        withValueSet("HedisYear2018", "POTENTIALLY_HARMFUL_DRUGS_RATE_2_MEDICATIONS") || withValueSet("HedisYear2018", "POTENTIALLY_HARMFUL_DRUGS_RATE_1_AND_RATE_2_MEDICATIONS"),
+        prescribed == true
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.DdeRate2', MeasureStatusValue.SUCCESS, 'performance_met');
+end
+
+rule 'Year2018.Hedis.DdeRate2.GapReasons.PerformanceNotMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2018.DdeRate2')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.DdeRate2', MeasureStatusValue.GAP, 'performance_not_met');
+end

@@ -1,0 +1,22 @@
+package com.ablehealth;
+
+import com.ablehealth.model.Patient;
+import com.ablehealth.payloads.Program;
+
+global com.ablehealth.results.PatientResults controlSet;
+
+rule "risk.CMS_HCC.Medicaid"
+when
+  Program(rules contains 'risk.cms_hcc')
+  Patient(medicaid)
+then
+  controlSet.addVariable("statuses.MEDICAID");
+end
+
+rule "risk.CMS_HCC.Disabled"
+when
+  Program(rules contains 'risk.cms_hcc')
+  Patient(disabled, $sex: sex)
+then
+  controlSet.addVariable("statuses.ORIGINALLY_DISABLED_" + $sex.toUpperCase());
+end

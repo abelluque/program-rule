@@ -1,0 +1,49 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips470Rate1.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips470Rate1')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod.start.minusMonths(15),$program.measurementPeriod.end.minusMonths(15)),
+        withValueSet("MipsYear2019", "MIPS_470_PROCEDURE")
+    )
+    $patient: Patient(getAgeInYearsAt($program.measurementPeriod.start.minusMonths(15)) >= 18)
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips470Rate1'));
+end
+
+rule 'Year2019.Mips470Rate1.Success.MipsM1045'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips470Rate1')
+    (
+        exists ClinicalActivity(
+          startsDuring($encounter.startDate,$encounter.startDate.plusMonths(15)),
+          withValueSet("MipsYear2019", "PERFORMANCE_MET_M1045")
+        )
+        or (
+          exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusMonths(3),$encounter.startDate),
+            withValueSet("AbleYear2019", "OXFORD_KNEE_SCORE")
+          )
+          and exists ClinicalActivity(
+            startsDuring($encounter.startDate.plusMonths(9),$encounter.startDate.plusMonths(15)),
+            withValueSet("AbleYear2019", "OXFORD_KNEE_SCORE")
+          )
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips470Rate1', MeasureStatusValue.SUCCESS, "M1045");
+end
+
+rule 'Year2019.Mips470Rate1.Gaps.MipsM1046'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips470Rate1')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips470Rate1', MeasureStatusValue.GAP, "M1046");
+end

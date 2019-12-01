@@ -1,0 +1,33 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Able.Awv1.Denominator'
+when
+    $program: Program(rules contains 'measure.Able.2019.Awv1')
+    $patient: Patient()
+then
+    insert(new PatientDenominator($program, $patient, 'Year2019.Awv1'));
+end
+
+rule 'Year2019.Able.Awv1.SuccessReasons.PerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Awv1')
+    exists ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("AbleYear2019", "ANNUAL_WELLNESS_VISIT___MEDICARE")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Awv1', MeasureStatusValue.SUCCESS, 'performance_met');
+end
+
+rule 'Year2019.Able.Awv1.GapReasons.PerformanceNotMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Awv1')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Awv1', MeasureStatusValue.GAP, 'performance_not_met');
+end

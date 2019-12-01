@@ -1,0 +1,323 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import accumulate com.ablehealth.functions.LatestClinicalActivityAccumulateFunction latestClinicalActivity;
+
+global PatientResults controlSet;
+
+declare Year2019Cms138v7PreventiveVisit
+    encounter: ClinicalActivity
+end
+
+declare Year2019Cms138v7OfficeVisit
+    encounter: ClinicalActivity
+end
+
+declare Year2019Cms138v7TwoVisitsOrg
+    encounter: ClinicalActivity
+end
+
+declare Year2019Cms138v7TwoVisitsGroup
+    encounter: ClinicalActivity
+end
+
+declare Year2019Cms138v7TwoVisitsProvider
+    encounter: ClinicalActivity
+end
+
+declare Year2019Cms138v7TobaccoUser
+    screening: ClinicalActivity
+end
+
+declare Year2019Cms138v7TobaccoNonUser
+end
+
+declare Year2019Cms138v7Counseling
+end
+
+declare Year2019Cms138v7MedicalReasonScreening
+end
+
+declare Year2019Cms138v7MedicalReasonCounseling
+end
+
+declare Year2019Cms138v7LimitedLife
+end
+
+rule 'Year2019.Cms138v7.Denominator.PreventiveVisit'
+when
+    $program: Program(
+        rules contains 'measure.Cms.2019.Cms138v7Rate1' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate2' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate3'
+    )
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        endsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "ANNUAL_WELLNESS_VISIT") ||
+        withValueSet("VsacYear2019", "PREVENTIVE_CARE_SERVICES___ESTABLISHED_OFFICE_VISIT_18_AND_UP") ||
+        withValueSet("VsacYear2019", "PREVENTIVE_CARE_SERVICES___OTHER") ||
+        withValueSet("VsacYear2019", "PREVENTIVE_CARE_SERVICES___GROUP_COUNSELING") ||
+        withValueSet("VsacYear2019", "PREVENTIVE_CARE_SERVICES_INDIVIDUAL_COUNSELING") ||
+        withValueSet("VsacYear2019", "PREVENTIVE_CARE_SERVICES_INITIAL_OFFICE_VISIT_18_AND_UP")
+    )
+    Patient(getAgeInYearsAt($program.measurementPeriod.start) >= 18)
+then
+    insert(new Year2019Cms138v7PreventiveVisit($encounter));
+end
+
+rule 'Year2019.Cms138v7.Denominator.OfficeVisit'
+when
+    $program: Program(
+        rules contains 'measure.Cms.2019.Cms138v7Rate1' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate2' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate3'
+    )
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        endsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "ANNUAL_WELLNESS_VISIT") ||
+        withValueSet("VsacYear2019", "HEALTH_AND_BEHAVIORAL_ASSESSMENT___INITIAL") ||
+        withValueSet("VsacYear2019", "HEALTH_BEHAVIORAL_ASSESSMENT___INDIVIDUAL") ||
+        withValueSet("VsacYear2019", "HEALTH_AND_BEHAVIORAL_ASSESSMENT_REASSESSMENT") ||
+        withValueSet("VsacYear2019", "HOME_HEALTHCARE_SERVICES") ||
+        withValueSet("VsacYear2019", "OCCUPATIONAL_THERAPY_EVALUATION") ||
+        withValueSet("VsacYear2019", "OFFICE_VISIT") ||
+        withValueSet("VsacYear2019", "OPHTHALMOLOGICAL_SERVICES") ||
+        withValueSet("VsacYear2019", "PSYCH_VISIT___DIAGNOSTIC_EVALUATION") ||
+        withValueSet("VsacYear2019", "PSYCH_VISIT___PSYCHOTHERAPY") ||
+        withValueSet("VsacYear2019", "PSYCHOANALYSIS") ||
+        withValueSet("VsacYear2019", "SPEECH_AND_HEARING_EVALUATION")
+    )
+    Patient(getAgeInYearsAt($program.measurementPeriod.start) >= 18)
+then
+    insert(new Year2019Cms138v7OfficeVisit($encounter));
+end
+
+rule 'Year2019.Cms138v7.Denominator.TwoVisitsOrg'
+when
+    $program: Program(
+        rules contains 'measure.Cms.2019.Cms138v7Rate1' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate2' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate3'
+    )
+    Year2019Cms138v7OfficeVisit($encounter: encounter)
+    accumulate(
+        ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            endsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "ANNUAL_WELLNESS_VISIT") ||
+            withValueSet("VsacYear2019", "HEALTH_AND_BEHAVIORAL_ASSESSMENT___INITIAL") ||
+            withValueSet("VsacYear2019", "HEALTH_BEHAVIORAL_ASSESSMENT___INDIVIDUAL") ||
+            withValueSet("VsacYear2019", "HEALTH_AND_BEHAVIORAL_ASSESSMENT_REASSESSMENT") ||
+            withValueSet("VsacYear2019", "HOME_HEALTHCARE_SERVICES") ||
+            withValueSet("VsacYear2019", "OCCUPATIONAL_THERAPY_EVALUATION") ||
+            withValueSet("VsacYear2019", "OFFICE_VISIT") ||
+            withValueSet("VsacYear2019", "OPHTHALMOLOGICAL_SERVICES") ||
+            withValueSet("VsacYear2019", "PSYCH_VISIT___DIAGNOSTIC_EVALUATION") ||
+            withValueSet("VsacYear2019", "PSYCH_VISIT___PSYCHOTHERAPY") ||
+            withValueSet("VsacYear2019", "PSYCHOANALYSIS") ||
+            withValueSet("VsacYear2019", "SPEECH_AND_HEARING_EVALUATION")
+        );
+        $count: count(1);
+        $count >= 2
+    )
+    Patient(getAgeInYearsAt($program.measurementPeriod.start) >= 18)
+then
+    insert(new Year2019Cms138v7TwoVisitsOrg($encounter));
+end
+
+rule 'Year2019.Cms138v7.Denominator.TwoVisitsGroup'
+when
+    $program: Program(
+        rules contains 'measure.Cms.2019.Cms138v7Rate1' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate2' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate3'
+    )
+    Year2019Cms138v7OfficeVisit($encounter: encounter)
+    accumulate(
+        ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            endsDuring($program.measurementPeriod),
+            groupExternalId == $encounter.groupExternalId,
+            withValueSet("VsacYear2019", "ANNUAL_WELLNESS_VISIT") ||
+            withValueSet("VsacYear2019", "HEALTH_AND_BEHAVIORAL_ASSESSMENT___INITIAL") ||
+            withValueSet("VsacYear2019", "HEALTH_BEHAVIORAL_ASSESSMENT___INDIVIDUAL") ||
+            withValueSet("VsacYear2019", "HEALTH_AND_BEHAVIORAL_ASSESSMENT_REASSESSMENT") ||
+            withValueSet("VsacYear2019", "HOME_HEALTHCARE_SERVICES") ||
+            withValueSet("VsacYear2019", "OCCUPATIONAL_THERAPY_EVALUATION") ||
+            withValueSet("VsacYear2019", "OFFICE_VISIT") ||
+            withValueSet("VsacYear2019", "OPHTHALMOLOGICAL_SERVICES") ||
+            withValueSet("VsacYear2019", "PSYCH_VISIT___DIAGNOSTIC_EVALUATION") ||
+            withValueSet("VsacYear2019", "PSYCH_VISIT___PSYCHOTHERAPY") ||
+            withValueSet("VsacYear2019", "PSYCHOANALYSIS") ||
+            withValueSet("VsacYear2019", "SPEECH_AND_HEARING_EVALUATION")
+        );
+        $count: count(1);
+        $count >= 2
+    )
+    Patient(getAgeInYearsAt($program.measurementPeriod.start) >= 18)
+then
+    insert(new Year2019Cms138v7TwoVisitsGroup($encounter));
+end
+
+rule 'Year2019.Cms138v7.Denominator.TwoVisitsProvider'
+when
+    $program: Program(
+        rules contains 'measure.Cms.2019.Cms138v7Rate1' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate2' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate3'
+    )
+    Year2019Cms138v7OfficeVisit($encounter: encounter)
+    accumulate(
+        ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            endsDuring($program.measurementPeriod),
+            providerExternalId == $encounter.providerExternalId,
+            withValueSet("VsacYear2019", "ANNUAL_WELLNESS_VISIT") ||
+            withValueSet("VsacYear2019", "HEALTH_AND_BEHAVIORAL_ASSESSMENT___INITIAL") ||
+            withValueSet("VsacYear2019", "HEALTH_BEHAVIORAL_ASSESSMENT___INDIVIDUAL") ||
+            withValueSet("VsacYear2019", "HEALTH_AND_BEHAVIORAL_ASSESSMENT_REASSESSMENT") ||
+            withValueSet("VsacYear2019", "HOME_HEALTHCARE_SERVICES") ||
+            withValueSet("VsacYear2019", "OCCUPATIONAL_THERAPY_EVALUATION") ||
+            withValueSet("VsacYear2019", "OFFICE_VISIT") ||
+            withValueSet("VsacYear2019", "OPHTHALMOLOGICAL_SERVICES") ||
+            withValueSet("VsacYear2019", "PSYCH_VISIT___DIAGNOSTIC_EVALUATION") ||
+            withValueSet("VsacYear2019", "PSYCH_VISIT___PSYCHOTHERAPY") ||
+            withValueSet("VsacYear2019", "PSYCHOANALYSIS") ||
+            withValueSet("VsacYear2019", "SPEECH_AND_HEARING_EVALUATION")
+        );
+        $count: count(1);
+        $count >= 2
+    )
+    Patient(getAgeInYearsAt($program.measurementPeriod.start) >= 18)
+then
+    insert(new Year2019Cms138v7TwoVisitsProvider($encounter));
+end
+
+rule 'Year2019.Cms138v7.TobaccoUser'
+when
+    $program: Program(
+        rules contains 'measure.Cms.2019.Cms138v7Rate1' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate2' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate3'
+    )
+    $screening: ClinicalActivity(withChildValueSet("VsacYear2019", "TOBACCO_USER")) from accumulate(
+        $c: ClinicalActivity(
+            startsDuring($program.measurementPeriod.end.minusMonths(24), $program.measurementPeriod.end),
+            withValueSet("VsacYear2019", "TOBACCO_USE_SCREENING")
+        ),
+        latestClinicalActivity($c)
+    )
+then
+    insert(new Year2019Cms138v7TobaccoUser($screening));
+end
+
+rule 'Year2019.Cms138v7.TobaccoNonUser'
+when
+    $program: Program(
+        rules contains 'measure.Cms.2019.Cms138v7Rate1' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate2' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate3'
+    )
+    exists ClinicalActivity(withChildValueSet("VsacYear2019", "TOBACCO_NON_USER")) from accumulate(
+        $c: ClinicalActivity(
+            startsDuring($program.measurementPeriod.end.minusMonths(24), $program.measurementPeriod.end),
+            withValueSet("VsacYear2019", "TOBACCO_USE_SCREENING")
+        ),
+        latestClinicalActivity($c)
+    )
+then
+    insert(new Year2019Cms138v7TobaccoNonUser());
+end
+
+rule 'Year2019.Cms138v7.Counseling'
+when
+    $program: Program(
+        rules contains 'measure.Cms.2019.Cms138v7Rate1' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate2' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate3'
+    )
+    Year2019Cms138v7TobaccoUser($screening: screening)
+    (
+        exists ClinicalActivity(
+            withValueSet("VsacYear2019", "TOBACCO_USE_CESSATION_COUNSELING"),
+            startsBefore($program.measurementPeriod.end),
+            startsOnOrAfter($screening.startDate)
+        ) or exists Medication(
+            withValueSet("VsacYear2019", "TOBACCO_USE_CESSATION_PHARMACOTHERAPY"),
+            codeType == 'RXNORM',
+            startsBefore($program.measurementPeriod.end),
+            startsOnOrAfter($screening.startDate)
+        )
+    )
+then
+    insert(new Year2019Cms138v7Counseling());
+end
+
+rule 'Year2019.Cms138v7.MedicalReasonScreening'
+when
+    $program: Program(
+        rules contains 'measure.Cms.2019.Cms138v7Rate1' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate2' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate3'
+    )
+    (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod.end.minusMonths(24), $program.measurementPeriod.end),
+            withValueSet("VsacYear2019", "TOBACCO_USE_SCREENING"),
+            withChildValueSet("VsacYear2019", "MEDICAL_REASON")
+        )
+        or exists Diagnosis(
+            withValueSet("VsacYear2019","LIMITED_LIFE_EXPECTANCY"),
+            startsAfter($program.measurementPeriod.end) ||
+            endsAfter($program.measurementPeriod.end)
+        )
+    )
+then
+    insert(new Year2019Cms138v7MedicalReasonScreening());
+end
+
+rule 'Year2019.Cms138v7.MedicalReasonCounseling'
+when
+    $program: Program(
+        rules contains 'measure.Cms.2019.Cms138v7Rate1' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate2' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate3'
+    )
+    Year2019Cms138v7TobaccoUser($screening: screening)
+    (
+        exists ClinicalActivity(
+                startsOnOrAfter($screening.startDate),
+                startsBefore($program.measurementPeriod.end),
+                withValueSet("VsacYear2019","TOBACCO_USE_CESSATION_COUNSELING"),
+                withChildValueSet("VsacYear2019", "MEDICAL_REASON")
+        ) or exists ClinicalActivity(
+                startsOnOrAfter($screening.startDate),
+                startsBefore($program.measurementPeriod.end),
+                withValueSet("VsacYear2019","TOBACCO_USE_CESSATION_PHARMACOTHERAPY"),
+                withChildValueSet("VsacYear2019", "MEDICAL_REASON")
+        )
+    )
+then
+    insert(new Year2019Cms138v7MedicalReasonCounseling());
+end
+
+rule 'Year2019.Cms138v7.LimitedLife'
+when
+    $program: Program(
+        rules contains 'measure.Cms.2019.Cms138v7Rate1' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate2' ||
+        rules contains 'measure.Cms.2019.Cms138v7Rate3'
+    )
+    exists Diagnosis(
+        withValueSet("VsacYear2019","LIMITED_LIFE_EXPECTANCY"),
+        startsAfter($program.measurementPeriod.end) ||
+        endsAfter($program.measurementPeriod.end)
+    )
+then
+    insert(new Year2019Cms138v7LimitedLife());
+end

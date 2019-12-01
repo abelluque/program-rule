@@ -1,0 +1,59 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Spc1.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2019.Spc1')
+    Year2019HedisSpcDenominator()
+    $patient: Patient()
+then
+    insert(new PatientDenominator($program, $patient, 'Year2019.Spc1'));
+end
+
+rule 'Year2019.Spc1.Exclusion.exclusion_1'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Spc1')
+    Year2019HedisSpcExclusion1()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Spc1', MeasureStatusValue.EXCLUSION, "exclusion_1");
+end
+
+rule 'Year2019.Spc1.Exclusion.exclusion_2'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Spc1')
+    Year2019HedisSpcExclusion2()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Spc1', MeasureStatusValue.EXCLUSION, "exclusion_2");
+end
+
+rule 'Year2019.Spc1.Exclusion.exclusion_3'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Spc1')
+    Year2019HedisSpcExclusion3()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Spc1', MeasureStatusValue.EXCLUSION, "exclusion_3");
+end
+
+rule 'Year2019.Spc1.Success.performance_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Spc1')
+    exists Medication(
+      startsDuring($program.measurementPeriod),
+      withValueSet("NcqaYear2019", "HIGH_AND_MODERATE_INTENSITY_STATIN_MEDICATIONS"),
+      prescribed == true
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Spc1', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Spc1.Gap.performance_not_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Spc1')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Spc1', MeasureStatusValue.GAP, "performance_not_met");
+end

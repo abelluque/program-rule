@@ -1,0 +1,44 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.W34.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2019.W34')
+    $patient: Patient(	(getAgeInYearsAt($program.measurementPeriod.end) >= 3) && (getAgeInYearsAt($program.measurementPeriod.end) <= 6))
+    not ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+        withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+    )
+
+then
+    insert(new PatientDenominator($program, $patient, 'Year2019.W34'));
+end
+
+rule 'Year2019.W34.Success.performance_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.W34')
+    exists ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("HedisYear2019", "WELL_CARE")
+    )
+    or exists Diagnosis(
+        startsDuring($program.measurementPeriod),
+        withValueSet("HedisYear2019", "WELL_CARE")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.W34', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.W34.Gap.performance_not_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.W34')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.W34', MeasureStatusValue.GAP, "performance_not_met");
+end
+

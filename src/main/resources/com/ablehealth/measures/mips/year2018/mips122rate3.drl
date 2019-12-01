@@ -1,0 +1,126 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2018.Mips122Rate3.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2018.Mips122Rate3')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        placeOfService != '02',
+        codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+        withValueSet("MipsYear2018", "MIPS_122_ENCOUNTER")
+    )
+    exists Diagnosis(
+        overlaps($encounter),
+        withValueSet("MipsYear2018", "CHRONIC_KIDNEY_DISEASE_STAGE_3_4_OR_5")
+    )
+    Patient(
+        getAgeInYearsAt($encounter.startDate) >= 18
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2018.Mips122Rate3'));
+end
+
+rule 'Year2018.Mips122Rate3.Success.G8476'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips122Rate3')
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("MipsYear2018", "PERFORMANCE_MET_G8476")
+        )
+        or (
+            exists ClinicalActivity(
+                startsDuring($encounter),
+                withValueSet("VsacYear2018", "SYSTOLIC_BLOOD_PRESSURE"),
+                resultAsDecimal < 140
+            )
+            and exists ClinicalActivity(
+                startsDuring($encounter),
+                withValueSet("VsacYear2018", "DIASTOLIC_BLOOD_PRESSURE"),
+                resultAsDecimal < 90
+            )
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips122Rate3', MeasureStatusValue.SUCCESS, "G8476");
+end
+
+rule 'Year2018.Mips122Rate3.Success.G84770513F'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips122Rate3')
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("MipsYear2018", "PERFORMANCE_NOT_MET_G8477")
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("VsacYear2018", "SYSTOLIC_BLOOD_PRESSURE"),
+            resultAsDecimal != null
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("VsacYear2018", "DIASTOLIC_BLOOD_PRESSURE"),
+            resultAsDecimal != null
+        )
+    )
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter),
+            codeModifiers.isEmpty,
+            withValueSet("MipsYear2018", "PERFORMANCE_MET_0513F")
+        )
+        or exists Medication(
+            overlaps($encounter),
+            withValueSet("VsacYear2018", "ANTI_HYPERTENSIVE_PHARMACOLOGIC_THERAPY")
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter.startDate.plusDays(1),$encounter.startDate.plusDays(90)),
+            withValueSet("VsacYear2018", "SYSTOLIC_BLOOD_PRESSURE") || withValueSet("VsacYear2018", "DIASTOLIC_BLOOD_PRESSURE")
+        )
+        or exists ClinicalActivity(
+            startsDuring($encounter),
+            (withValueSet("VsacYear2018", "LIFESTYLE_RECOMMENDATION") || withValueSet("VsacYear2018", "WEIGHT_REDUCTION_RECOMMENDED") || withValueSet("VsacYear2018", "DIETARY_RECOMMENDATIONS") || withValueSet("VsacYear2018", "PHYSICAL_ACTIVITY_RECOMMENDATION") || withValueSet("VsacYear2018", "MODERATION_OF_ETOH_CONSUMPTION_RECOMMENDATION") || withValueSet("VsacYear2018", "REFERRAL_TO_ALTERNATIVE_PROVIDER_PRIMARY_CARE_PROVIDER"))
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips122Rate3', MeasureStatusValue.SUCCESS, "G84770513F");
+end
+
+rule 'Year2018.Mips122Rate3.Gap.G84770513F8P'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips122Rate3')
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter),
+            withValueSet("MipsYear2018", "PERFORMANCE_NOT_MET_G8477")
+        )
+        or (
+            exists ClinicalActivity(
+                startsDuring($encounter),
+                withValueSet("VsacYear2018", "SYSTOLIC_BLOOD_PRESSURE"),
+                resultAsDecimal != null
+            )
+            and exists ClinicalActivity(
+                startsDuring($encounter),
+                withValueSet("VsacYear2018", "DIASTOLIC_BLOOD_PRESSURE"),
+                resultAsDecimal != null
+            )
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips122Rate3', MeasureStatusValue.GAP, "G84770513F8P");
+end
+
+rule 'Year2018.Mips122Rate3.Gaps.G8478'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips122Rate3')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips122Rate3', MeasureStatusValue.GAP, "G8478");
+end

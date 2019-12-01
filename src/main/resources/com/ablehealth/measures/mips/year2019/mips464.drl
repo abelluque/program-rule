@@ -1,0 +1,81 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips464.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips464')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        placeOfService != '02',
+        codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+        withValueSet("MipsYear2019", "MIPS_464_ENCOUNTER")
+    )
+    exists Diagnosis(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "OME")
+    )
+    not (
+      $earlierEncounter: ClinicalActivity(
+          startsDuring($encounter.startDate.minusDays(90),$encounter.startDate.minusDays(1)),
+          placeOfService != '02',
+          codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+          withValueSet("MipsYear2019", "MIPS_464_ENCOUNTER")
+      )
+      and exists Diagnosis(
+          startsDuring($earlierEncounter),
+          withValueSet("MipsYear2019", "OME")
+      )
+    )
+    exists Patient(
+      getAgeInMonthsAt($encounter.startDate) >= 2,
+      getAgeInYearsAt($encounter.startDate) < 12
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips464'));
+end
+
+rule 'Year2019.Mips464.Success.MipsG9959'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips464')
+    (
+        not Medication(
+            startsDuring($encounter.startDate,$encounter.startDate.plusDays(90)),
+            withValueSet("VsacYear2019", "SYSTEMIC_ANTIBIOTICS"),
+            prescribed == true,
+            providerExternalId == $encounter.providerExternalId
+        )
+        and not ClinicalActivity(
+            startsDuring($encounter.startDate,$encounter.startDate.plusDays(90)),
+            withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G9960")
+        )
+        and not ClinicalActivity(
+            startsDuring($encounter.startDate,$encounter.startDate.plusDays(90)),
+            withValueSet("MipsYear2019", "PERFORMANCE_NOT_MET_G9961")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips464', MeasureStatusValue.SUCCESS, "G9959");
+end
+
+rule 'Year2019.Mips464.Exception.MipsG9960'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips464')
+    exists ClinicalActivity(
+        startsDuring($encounter.startDate,$encounter.startDate.plusDays(90)),
+        withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G9960")
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips464', MeasureStatusValue.EXCEPTION, "G9960");
+end
+
+rule 'Year2019.Mips464.Gaps.MipsG9961'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips464')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips464', MeasureStatusValue.GAP, "G9961");
+end

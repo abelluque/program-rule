@@ -1,0 +1,106 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips332.Denominator'
+when
+  $program: Program(rules contains 'measure.Mips.2019.Mips332')
+  $encounter: ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      placeOfService != '02',
+      codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+      withValueSet("MipsYear2019", "MIPS_332_ENCOUNTER")
+  )
+  exists Diagnosis(
+      startsDuring($encounter),
+      withValueSet("MipsYear2019", "ACUTE_SINUSITIS")
+  )
+  exists Diagnosis(
+      startsDuring($encounter),
+      withValueSet("MipsYear2019", "BACTERIAL_AGENT")
+  )
+  (
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "BACTERIAL_SINUSITIS")
+    )
+    or exists Diagnosis(
+        startsDuring($encounter),
+        withValueSet("AbleYear2018", "BACTERIAL_SINUSITIS")
+    )
+  )
+  (
+    exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "ANTIBIOTIC_PRESCRIBED")
+    )
+    or exists Medication(
+        startsDuring($encounter.startDate,$encounter.startDate.plusDays(10)),
+        prescribed == true,
+        withValueSet("AbleYear2018", "SYSTEMIC_ANTIBIOTICS")
+    )
+  )
+  $patient: Patient(getAgeInYearsAt($encounter.startDate) >= 18)
+then
+  insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips332'));
+end
+
+rule 'Year2019.Mips332.Success.G9315'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips332')
+  $patient: Patient()
+  exists ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    withValueSet("MipsYear2019", "PERFORMANCE_MET_G9315")
+  )
+  or exists Medication(
+    startsDuring($encounter),
+    prescribed == true,
+    withValueSet("AbleYear2018", "AMOXICILLIN")
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips332', MeasureStatusValue.SUCCESS, "G9315");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips332', MeasureStatusValue.SUCCESS, "G9315");
+end
+
+rule 'Year2019.Mips332.Exception.G9313'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips332')
+  $patient: Patient()
+  exists ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G9313")
+  )
+  or exists Diagnosis(
+    overlaps($encounter),
+    withValueSet("AbleYear2018", "CYSTIC_FIBROSIS") || withValueSet("AbleYear2018", "IMMUNODEFICIENT_CONDITIONS")
+  )
+  or exists Allergy(
+    overlaps($encounter),
+    withValueSet("AbleYear2018", "AMOXICILLIN_INGREDIENT")
+  )
+  or exists Diagnosis(
+    overlaps($encounter),
+    withValueSet("AbleYear2018", "CHRONIC_SINUSITIS") || withValueSet("AbleYear2018", "ALLERGY_TO_AMOXICILLIN")
+  )
+  or exists ClinicalActivity(
+    startsDuring($encounter.startDate.minusMonths(12),$encounter.startDate),
+    withValueSet("AbleYear2018", "SINUS_SURGERY")
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips332', MeasureStatusValue.EXCEPTION, "G9313");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips332', MeasureStatusValue.EXCEPTION, "G9313");
+end
+
+rule 'Year2019.Mips332.Gap.G9314'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips332')
+  $patient: Patient()
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Mips332', MeasureStatusValue.GAP, "G9314");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2019.Mips332', MeasureStatusValue.GAP, "G9314");
+end

@@ -1,0 +1,30 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Coa.Denominator'
+when
+    $program: Program(
+      rules contains 'measure.Hedis.2019.Coa1' ||
+      rules contains 'measure.Hedis.2019.Coa2' ||
+      rules contains 'measure.Hedis.2019.Coa3' ||
+      rules contains 'measure.Hedis.2019.Coa4'
+    )
+    $patient: Patient(
+      getAgeInYearsAt($program.measurementPeriod.end) >= 66
+    )
+    not ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+      withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+    )
+then
+    insert(new PatientDenominator($program, $patient, 'Year2019.Coa1'));
+    insert(new PatientDenominator($program, $patient, 'Year2019.Coa2'));
+    insert(new PatientDenominator($program, $patient, 'Year2019.Coa3'));
+    insert(new PatientDenominator($program, $patient, 'Year2019.Coa4'));
+end

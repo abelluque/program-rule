@@ -1,0 +1,52 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Cdc6.Success.performance_met'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cdc6')
+	(
+		exists (
+			ClinicalActivity(
+				startsDuring($program.measurementPeriod),
+				withValueSet("HedisYear2019", "URINE_PROTEIN_TESTS") ||
+				withValueSet("HedisYear2019", "NEPHROPATHY_TREATMENT") ||
+				withValueSet("HedisYear2019", "ESRD") ||
+				withValueSet("HedisYear2019", "KIDNEY_TRANSPLANT")
+			)
+		)
+		or exists (
+			LaboratoryTestPerformed(
+				startsDuring($program.measurementPeriod),
+				withValueSet("HedisYear2019", "URINE_PROTEIN_TESTS")
+			)
+		)
+		or exists (
+			Diagnosis(
+				overlaps($program.measurementPeriod),
+				withValueSet("HedisYear2019", "CKD_STAGE_4") ||
+				withValueSet("HedisYear2019", "NEPHROPATHY_TREATMENT") ||
+				withValueSet("HedisYear2019", "ESRD")
+			)
+		)
+		or exists (
+			Medication(
+				startsDuring($program.measurementPeriod),
+				withValueSet("VsacYear2019", "ACE_INHIBITOR_OR_ARB")
+			)
+		)
+	)
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cdc6', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Cdc6.Gap.performance_not_met'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cdc6')
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cdc6', MeasureStatusValue.GAP, "performance_not_met");
+end

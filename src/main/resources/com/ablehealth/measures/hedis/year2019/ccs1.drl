@@ -1,0 +1,141 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+declare CervicalCytologyLab
+	cervicalCytologyLab: LaboratoryTestPerformed
+end
+
+declare CervicalCytologyProcedure
+	cervicalCytologyProcedure: ClinicalActivity
+end
+
+rule 'Year2019.Css1.CervicalCytologyLab'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Ccs1')
+	$cervicalCytologyLab: LaboratoryTestPerformed(
+		startsDuring($program.measurementPeriod.end.plusDays(1).minusMonths(60),$program.measurementPeriod.end),
+		$patient.getAgeInYearsAt($program.measurementPeriod.start) >= 30,
+		withValueSet("HedisYear2019", "CERVICAL_CYTOLOGY")
+	)
+then
+	insert(new CervicalCytologyLab($cervicalCytologyLab));
+end
+
+rule 'Year2019.Css1.CervicalCytologyProcedure'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Ccs1')
+	$cervicalCytologyProcedure: ClinicalActivity(
+		startsDuring($program.measurementPeriod.end.plusDays(1).minusMonths(60),$program.measurementPeriod.end),
+		$patient.getAgeInYearsAt($program.measurementPeriod.start) >= 30,
+		withValueSet("HedisYear2019", "CERVICAL_CYTOLOGY")
+	)
+then
+	insert(new CervicalCytologyProcedure($cervicalCytologyProcedure));
+end
+
+rule 'Year2019.Ccs1.Denominator'
+when
+	$program: Program(rules contains 'measure.Hedis.2019.Ccs1')
+	$patient: Patient(
+		sex == "female" &&
+		getAgeInYearsAt($program.measurementPeriod.end) >= 24 &&
+		getAgeInYearsAt($program.measurementPeriod.end) <= 64
+	)
+	and not ClinicalActivity(
+		startsDuring($program.measurementPeriod),
+		withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+		withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+	)
+then
+	insert(new PatientDenominator($program, $patient, 'Year2019.Ccs1'));
+end
+
+rule 'Year2019.Ccs1.Exclusion.exclusion_1'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Ccs1')
+	(
+		exists Diagnosis(
+			startsOnOrBefore($program.measurementPeriod.end),
+			withValueSet("HedisYear2019", "ABSENCE_OF_CERVIX")
+		)
+	 	or exists ClinicalActivity(
+			startsOnOrBefore($program.measurementPeriod.end),
+	 		withValueSet("HedisYear2019", "ABSENCE_OF_CERVIX")
+	 	)
+	)
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Ccs1', MeasureStatusValue.EXCLUSION, "exclusion_1");
+end
+
+rule 'Year2019.Ccs1.Success.performance_met'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Ccs1')
+	(
+		exists ClinicalActivity(
+			startsDuring($program.measurementPeriod.end.plusDays(1).minusMonths(36),$program.measurementPeriod.end),
+			withValueSet("HedisYear2019", "CERVICAL_CYTOLOGY")
+		)
+		or exists LaboratoryTestPerformed(
+			startsDuring($program.measurementPeriod.end.plusDays(1).minusMonths(36),$program.measurementPeriod.end),
+			withValueSet("HedisYear2019", "CERVICAL_CYTOLOGY")
+		)
+		or (
+			CervicalCytologyProcedure($cytologyProcedure: cervicalCytologyProcedure)
+			and exists (
+				LaboratoryTestPerformed(
+					startsDuring($program.measurementPeriod.end.plusDays(1).minusMonths(60),$program.measurementPeriod.end),
+					$patient.getAgeInYearsAt(startDate) >= 30,
+					withValueSet("HedisYear2019", "HPV_TESTS"),
+					$cytologyProcedure.startsDuring(startDate.minusDays(4), startDate.plusDays(4))
+				)
+			)
+		)
+		or (
+			CervicalCytologyProcedure($cytologyProcedure: cervicalCytologyProcedure)
+			and exists (
+				ClinicalActivity(
+					startsDuring($program.measurementPeriod.end.plusDays(1).minusMonths(60),$program.measurementPeriod.end),
+					$patient.getAgeInYearsAt(startDate) >= 30,
+					withValueSet("HedisYear2019", "HPV_TESTS"),
+					$cytologyProcedure.startsDuring(startDate.minusDays(4), startDate.plusDays(4))
+				)
+			)
+		)
+		or (
+			CervicalCytologyLab($cytologyLab: cervicalCytologyLab)
+			and exists (
+				LaboratoryTestPerformed(
+					startsDuring($program.measurementPeriod.end.plusDays(1).minusMonths(60),$program.measurementPeriod.end),
+					$patient.getAgeInYearsAt(startDate) >= 30,
+					withValueSet("HedisYear2019", "HPV_TESTS"),
+					$cytologyLab.startsDuring(startDate.minusDays(4), startDate.plusDays(4))
+				)
+			)
+		)
+		or (
+			CervicalCytologyLab($cytologyLab: cervicalCytologyLab)
+			and exists (
+				ClinicalActivity(
+					startsDuring($program.measurementPeriod.end.plusDays(1).minusMonths(60),$program.measurementPeriod.end),
+					$patient.getAgeInYearsAt(startDate) >= 30,
+					withValueSet("HedisYear2019", "HPV_TESTS"),
+					$cytologyLab.startsDuring(startDate.minusDays(4), startDate.plusDays(4))
+				)
+			)
+		)
+	)
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Ccs1', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Ccs1.Gap.performance_not_met'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Ccs1')
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Ccs1', MeasureStatusValue.GAP, "performance_not_met");
+end

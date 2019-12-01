@@ -1,0 +1,130 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import accumulate com.ablehealth.functions.LatestClinicalActivityAccumulateFunction latestClinicalActivity;
+import accumulate com.ablehealth.functions.LatestLaboratoryTestAccumulateFunction latestLaboratoryTestPerformed;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Cdc3.Success.hba1c_controlled'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cdc3')
+	(
+		exists (
+			(
+				$latestLab: LaboratoryTestPerformed(
+					resultAsDecimal < 8.0 ||
+					withValueSet("HedisYear2019", "HBA1C_LEVEL_LESS_THAN_7_0")
+				) from accumulate (
+					$l: LaboratoryTestPerformed(
+						startsDuring($program.measurementPeriod),
+						withValueSet("HedisYear2019", "HBA1C_TESTS") ||
+						withValueSet("AbleYear2019", "HBA1C_LABORATORY_TEST"),
+						resultAsDecimal != null
+					),
+					latestLaboratoryTestPerformed($l)
+				)
+				and not (
+					exists(
+						ClinicalActivity(
+							startsDuring($program.measurementPeriod),
+							withValueSet("HedisYear2019", "HBA1C_TESTS"),
+							startsAfter($latestLab.startDate)
+						)
+					)
+				)
+			)
+			or (
+				$latestActivity: ClinicalActivity(
+					resultAsDecimal < 8.0 ||
+					withValueSet("HedisYear2019", "HBA1C_LEVEL_LESS_THAN_7_0")
+				) from accumulate (
+					$c: ClinicalActivity(
+						startsDuring($program.measurementPeriod),
+						withValueSet("HedisYear2019", "HBA1C_TESTS")
+					),
+					latestClinicalActivity($c)
+				)
+				and not (
+					exists(
+						LaboratoryTestPerformed(
+							startsDuring($program.measurementPeriod),
+							withValueSet("HedisYear2019", "HBA1C_TESTS") ||
+							withValueSet("AbleYear2019", "HBA1C_LABORATORY_TEST"),
+							startsAfter($latestActivity.startDate)
+						)
+					)
+				)
+			)
+		)
+	)
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cdc3', MeasureStatusValue.SUCCESS, "hba1c_controlled");
+end
+
+rule 'Year2019.Cdc3.Gap.hba1c_high'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cdc3')
+	(
+		exists (
+			(
+				$latestLab: LaboratoryTestPerformed(
+					resultAsDecimal >= 8.0 ||
+					withValueSet("HedisYear2019", "HBA1C_LEVEL_GREATER_THAN_9_0")
+				) from accumulate (
+					$l: LaboratoryTestPerformed(
+						startsDuring($program.measurementPeriod),
+						withValueSet("HedisYear2019", "HBA1C_TESTS") ||
+						withValueSet("AbleYear2019", "HBA1C_LABORATORY_TEST"),
+						resultAsDecimal != null
+					),
+					latestLaboratoryTestPerformed($l)
+				)
+				and not (
+					exists(
+						ClinicalActivity(
+							startsDuring($program.measurementPeriod),
+							withValueSet("HedisYear2019", "HBA1C_TESTS"),
+							startsAfter($latestLab.startDate)
+						)
+					)
+				)
+			)
+			or (
+				$latestActivity: ClinicalActivity(
+					resultAsDecimal >= 8.0 ||
+					withValueSet("HedisYear2019", "HBA1C_LEVEL_GREATER_THAN_9_0")||
+					withValueSet("HedisYear2019", "HBA1C_LEVEL_7_0_9_0")
+				) from accumulate (
+					$c: ClinicalActivity(
+						startsDuring($program.measurementPeriod),
+						withValueSet("HedisYear2019", "HBA1C_TESTS")
+					),
+					latestClinicalActivity($c)
+				)
+				and not (
+					exists(
+						LaboratoryTestPerformed(
+							startsDuring($program.measurementPeriod),
+							withValueSet("HedisYear2019", "HBA1C_TESTS") ||
+							withValueSet("AbleYear2019", "HBA1C_LABORATORY_TEST"),
+							startsAfter($latestActivity.startDate)
+						)
+					)
+				)
+			)
+		)
+	)
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cdc3', MeasureStatusValue.GAP, "hba1c_high");
+end
+
+rule 'Year2019.Cdc3.Gap.hba1c_none'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cdc3')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cdc3', MeasureStatusValue.GAP, "hba1c_none");
+end

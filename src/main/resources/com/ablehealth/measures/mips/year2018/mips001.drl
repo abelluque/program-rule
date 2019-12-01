@@ -1,0 +1,138 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import accumulate com.ablehealth.functions.LatestClinicalActivityWithLowestResultAccumulateFunction latestClinicalActivityWithLowestResult;
+import accumulate com.ablehealth.functions.LatestLaboratoryTestWithLowestResultAccumulateFunction latestLaboratoryTestWithLowestResult;
+
+global PatientResults controlSet;
+
+rule 'Year2018.Mips001.Denominator'
+when
+  $program: Program(rules contains 'measure.Mips.2018.Mips001')
+  $encounter: ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    withValueSet("MipsYear2018", "MIPS_001_ENCOUNTER")
+  )
+  exists Diagnosis(
+    overlaps($encounter),
+    withValueSet("MipsYear2018", "DIABETES")
+  )
+  Patient(getAgeInYearsAt($encounter.startDate) >= 18 && getAgeInYearsAt($encounter.startDate) < 75)
+then
+  insert(new EncounterDenominator($program, $encounter, 'Year2018.Mips001'));
+end
+
+rule 'Year2018.Mips001.Exclusion.exclusion_1'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips001')
+  $patient: Patient()
+  exists ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    withValueSet("MipsYear2018", "MIPS_HOSPICE_SERVICE") || withValueSet("VsacYear2018", "PALLIATIVE_CARE")
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips001', MeasureStatusValue.EXCLUSION, "exclusion_1");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips001', MeasureStatusValue.EXCLUSION, 'exclusion_1');
+end
+
+rule 'Year2018.Mips001.Success.3046F'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips001')
+  $patient: Patient()
+  (
+    (
+      $mostRecentPerformanceMet: ClinicalActivity() from accumulate (
+        $c: ClinicalActivity(
+          startsDuring($program.measurementPeriod),
+          withValueSet("MipsYear2018", "PERFORMANCE_MET_3046F"),
+          codeModifiers.isEmpty
+        ),
+        latestClinicalActivityWithLowestResult($c)
+      )
+      and not ClinicalActivity(
+        startsAfter($mostRecentPerformanceMet.startDate),
+        withValueSet("MipsYear2018", "PERFORMANCE_NOT_MET_3044F") || withValueSet("MipsYear2018", "PERFORMANCE_NOT_MET_3045F")
+      )
+    )
+    or exists LaboratoryTestPerformed(resultAsDecimal > 9) from accumulate (
+      $c: LaboratoryTestPerformed(
+        startsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2018", "HBA1C_LABORATORY_TEST")
+      ),
+      latestLaboratoryTestWithLowestResult($c)
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips001', MeasureStatusValue.SUCCESS, "3046F");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips001', MeasureStatusValue.SUCCESS, '3046F');
+end
+
+rule 'Year2018.Mips001.Success.3046F-8P'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips001')
+  $patient: Patient()
+  (
+    (
+      $mostRecentPerformanceMet: ClinicalActivity() from accumulate (
+        $c: ClinicalActivity(
+          startsDuring($program.measurementPeriod),
+          withValueSet("MipsYear2018", "PERFORMANCE_MET_3046F"),
+          codeModifiers.contains('8P')
+        ),
+        latestClinicalActivityWithLowestResult($c)
+      )
+      and not ClinicalActivity(
+        startsAfter($mostRecentPerformanceMet.startDate),
+        withValueSet("MipsYear2018", "PERFORMANCE_NOT_MET_3044F") || withValueSet("MipsYear2018", "PERFORMANCE_NOT_MET_3045F")
+      )
+    )
+    or (
+      not LaboratoryTestPerformed(
+        startsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2018", "HBA1C_LABORATORY_TEST"),
+        resultAsDecimal != null
+      )
+      and not ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2018", "PERFORMANCE_NOT_MET_3044F") || withValueSet("MipsYear2018", "PERFORMANCE_NOT_MET_3045F")
+      )
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips001', MeasureStatusValue.SUCCESS, "3046F-8P");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips001', MeasureStatusValue.SUCCESS, '3046F-8P');
+end
+
+rule 'Year2018.Mips001.Gap.3044F'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips001')
+  $patient: Patient()
+  (
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2018", "PERFORMANCE_NOT_MET_3044F")
+    )
+    or exists LaboratoryTestPerformed(resultAsDecimal < 7) from accumulate (
+      $c: LaboratoryTestPerformed(
+        startsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2018", "HBA1C_LABORATORY_TEST")
+      ),
+      latestLaboratoryTestWithLowestResult($c)
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips001', MeasureStatusValue.GAP, "3044F");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips001', MeasureStatusValue.GAP, '3044F');
+end
+
+rule 'Year2018.Mips001.Gap.3045F'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips001')
+  $patient: Patient()
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips001', MeasureStatusValue.GAP, '3045F');
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips001', MeasureStatusValue.GAP, '3045F');
+end

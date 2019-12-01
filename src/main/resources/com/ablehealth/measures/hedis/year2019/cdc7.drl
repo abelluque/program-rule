@@ -1,0 +1,129 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import accumulate com.ablehealth.functions.LatestClinicalActivityAccumulateFunction latestClinicalActivity;
+
+global PatientResults controlSet;
+
+declare LastSystolicMeasurement
+  lastSystolicMeasurement: ClinicalActivity
+end
+
+declare LastDiastolicMeasurement
+  lastDiastolicMeasurement: ClinicalActivity
+end
+
+rule 'Year2019.Cdc7.LastSystolicMeasurement'
+when
+  PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cdc7')
+  $lastSystolicMeasurement: ClinicalActivity() from accumulate (
+	  $systolic: ClinicalActivity(
+		startsDuring($program.measurementPeriod),
+		withValueSet("HedisYear2019", "SYSTOLIC_LESS_THAN_140") ||
+		withValueSet("HedisYear2019", "SYSTOLIC_GREATER_THAN_EQUAL_TO_140") ||
+		withValueSet("VsacYear2019", "SYSTOLIC_BLOOD_PRESSURE")
+	  )
+	  and exists ClinicalActivity(
+		startsDuring($program.measurementPeriod),
+		startsDuring($systolic),
+		withValueSet("HedisYear2019", "OUTPATIENT") ||
+		withValueSet("HedisYear2019", "NONACUTE_INPATIENT")
+	  ),
+	  latestClinicalActivity($systolic)
+	)
+then
+  insert(new LastSystolicMeasurement($lastSystolicMeasurement));
+end
+
+rule 'Year2019.Cdc7.LastDiastolicMeasurement'
+when
+  PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cdc7')
+  $lastDiastolicMeasurement: ClinicalActivity() from accumulate (
+	  $diastolic: ClinicalActivity(
+		startsDuring($program.measurementPeriod),
+		withValueSet("HedisYear2019", "DIASTOLIC_LESS_THAN_80") ||
+		withValueSet("HedisYear2019", "DIASTOLIC_80_89") ||
+		withValueSet("HedisYear2019", "DIASTOLIC_GREATER_THAN_EQUAL_TO_90") ||
+		withValueSet("VsacYear2019", "DIASTOLIC_BLOOD_PRESSURE")
+	  )
+	  and exists ClinicalActivity(
+		startsDuring($program.measurementPeriod),
+		startsDuring($diastolic),
+		withValueSet("HedisYear2019", "OUTPATIENT") ||
+		withValueSet("HedisYear2019", "NONACUTE_INPATIENT")
+	  ),
+	  latestClinicalActivity($diastolic)
+	)
+then
+  insert(new LastDiastolicMeasurement($lastDiastolicMeasurement));
+end
+
+rule 'Year2019.Cdc7.Success.normal_blood_pressure'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cdc7')
+	exists LastSystolicMeasurement(
+		$lastSystolicMeasurement: lastSystolicMeasurement,
+		$lastSystolicMeasurement.resultAsDecimal < 140 ||
+		$lastSystolicMeasurement.codeValue == '3074F' ||
+		$lastSystolicMeasurement.codeValue == '3075F'
+	)
+	and exists LastDiastolicMeasurement(
+		$lastDiastolicMeasurement: lastDiastolicMeasurement,
+		$lastDiastolicMeasurement.resultAsDecimal < 90 ||
+		$lastDiastolicMeasurement.codeValue == '3078F' ||
+		$lastDiastolicMeasurement.codeValue == '3079F'
+	)
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cdc7', MeasureStatusValue.SUCCESS, "normal_blood_pressure");
+end
+
+rule 'Year2019.Cdc7.Gap.high_blood_pressure'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cdc7')
+	(
+		(
+			$visits: ClinicalActivity(
+				startsDuring($program.measurementPeriod),
+				withValueSet("HedisYear2019", "OUTPATIENT") ||
+				withValueSet("HedisYear2019", "NONACUTE_INPATIENT")
+			)
+			and exists ClinicalActivity(
+				startsDuring($visits),
+				startsDuring($program.measurementPeriod),
+				(
+					withValueSet("HedisYear2019", "SYSTOLIC_LESS_THAN_140") ||
+					withValueSet("HedisYear2019", "SYSTOLIC_GREATER_THAN_EQUAL_TO_140")
+				) ||
+				(
+					withValueSet("VsacYear2019", "SYSTOLIC_BLOOD_PRESSURE") &&
+					resultAsDecimal != null
+				)
+			)
+			and exists ClinicalActivity(
+				startsDuring($visits),
+				startsDuring($program.measurementPeriod),
+				(
+					withValueSet("HedisYear2019", "DIASTOLIC_LESS_THAN_80") ||
+					withValueSet("HedisYear2019", "DIASTOLIC_80_89") ||
+					withValueSet("HedisYear2019", "DIASTOLIC_GREATER_THAN_EQUAL_TO_90")
+				) ||
+				(
+					withValueSet("VsacYear2019", "DIASTOLIC_BLOOD_PRESSURE") &&
+					resultAsDecimal != null
+				)
+			)
+		)
+	)
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cdc7', MeasureStatusValue.GAP, "high_blood_pressure");
+end
+
+rule 'Year2019.Cdc7.Gap.no_blood_pressure'
+when
+	PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Cdc7')
+then
+	controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cdc7', MeasureStatusValue.GAP, "no_blood_pressure");
+end

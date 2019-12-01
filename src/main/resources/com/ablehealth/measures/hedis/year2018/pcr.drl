@@ -1,0 +1,92 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import accumulate com.ablehealth.functions.EarliestClinicalActivityAccumulateFunction earliestClinicalActivity;
+
+global PatientResults controlSet;
+
+rule 'Year2018.Hedis.Pcr.Denominator'
+when
+  $program: Program(rules contains 'measure.Hedis.2018.Pcr')
+  Patient(getAgeInYearsAt($program.measurementPeriod.end) >= 18)
+  $encounter: ClinicalActivity(
+    startsDuring($program.measurementPeriod.start, $program.measurementPeriod.end.minusDays(30)),
+    withValueSet("HedisYear2018", "INPATIENT_STAY")
+  )
+  not ClinicalActivity( // Encounter is not nonacute
+    startsDuring($encounter),
+    withValueSet("HedisYear2018", "NONACUTE_INPATIENT_STAY")
+  )
+  exists ClinicalActivity( // Patient has an inpatient stay the day before (multi-day stay)
+    startsDuring($encounter.startDate.minusDays(1),$encounter.startDate.minusDays(1)),
+    withValueSet("HedisYear2018", "INPATIENT_STAY")
+  )
+  not ClinicalActivity( // Patient does not have a transfer to another inpatient facility
+    startsDuring($encounter.startDate.plusDays(1),$encounter.startDate.plusDays(1)),
+    withValueSet("HedisYear2018", "INPATIENT_STAY")
+  )
+  not Diagnosis( // Patient is not pregnant
+    startsDuring($encounter),
+    withValueSet("HedisYear2018", "PREGNANCY")
+  )
+  not ( // Patient does not have a planned readmission
+    $earliestPlannedReadmission: ClinicalActivity() from accumulate (
+      $c: ClinicalActivity(
+        startsDuring($encounter.startDate.plusDays(2),$encounter.startDate.plusDays(30)),
+        withValueSet("HedisYear2018", "INPATIENT_STAY")
+      ),
+      earliestClinicalActivity($c)
+    )
+    and (
+      exists ClinicalActivity(
+        startsDuring($earliestPlannedReadmission),
+        withValueSet("HedisYear2018", "CHEMOTHERAPY") || withValueSet("HedisYear2018", "REHABILITATION") || withValueSet("HedisYear2018", "KIDNEY_TRANSPLANT") || withValueSet("HedisYear2018", "BONE_MARROW_TRANSPLANT") || withValueSet("HedisYear2018", "ORGAN_TRANSPLANT_OTHER_THAN_KIDNEY")
+      )
+      or (
+        exists ClinicalActivity(
+          startsDuring($earliestPlannedReadmission),
+          withValueSet("HedisYear2018", "POTENTIALLY_PLANNED_PROCEDURES")
+        )
+        and exists Diagnosis(
+          startsDuring($earliestPlannedReadmission),
+          withValueSet("HedisYear2018", "ACUTE_CONDITION")
+        )
+      )
+    )
+  )
+  not ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2018", "MIPS_HOSPICE_SERVICE") || withValueSet("VsacYear2018", "PALLIATIVE_CARE")
+  )
+then
+  insert(new EncounterDenominator($program, $encounter, 'Year2018.Pcr'));
+end
+
+rule 'Year2018.Hedis.Pcr.SuccessReasons.PerformanceMet'
+when
+  EncounterDenominator($encounter: clinicalActivity, $program: program, measure == 'Year2018.Pcr')
+  $readmission: ClinicalActivity(
+    startsDuring($encounter.startDate.plusDays(2), $encounter.startDate.plusDays(30)),
+    withValueSet("HedisYear2018", "INPATIENT_STAY")
+  )
+  not ClinicalActivity( // Readmission is not nonacute
+    startsDuring($readmission),
+    withValueSet("HedisYear2018", "NONACUTE_INPATIENT_STAY")
+  )
+  not Diagnosis( // Patient is not pregnant
+    startsDuring($readmission),
+    withValueSet("HedisYear2018", "PREGNANCY")
+  )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Pcr', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2018.Hedis.Pcr.GapReasons.PerformanceNotMet'
+when
+    EncounterDenominator($encounter: clinicalActivity, $program: program, measure == 'Year2018.Pcr')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Pcr', MeasureStatusValue.GAP, "performance_not_met");
+end

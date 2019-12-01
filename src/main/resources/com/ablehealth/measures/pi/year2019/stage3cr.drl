@@ -1,0 +1,91 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import java.util.Collection;
+
+global PatientResults controlSet;
+global Collection<Provider> providers;
+
+rule 'Year2019.Stage3cr.Denominator.NewDenominatorEncounter'
+when
+    $program: Program(rules contains 'measure.Pi.2019.Stage3cr')
+    $encounter: Encounter(
+        startsDuring($program.piMeasurementPeriod)
+    )
+    exists ClinicalActivity(
+        startsDuring($program.piMeasurementPeriod),
+        withValueSet("AbleYear2019", "NEW_ENCOUNTER"),
+        encounterExternalId == $encounter.externalId
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Stage3cr'));
+end
+
+rule 'Year2019.Stage3cr.Denominator.TransitionOfCare'
+when
+    $program: Program(rules contains 'measure.Pi.2019.Stage3cr')
+    $encounter: Encounter(
+        startsDuring($program.piMeasurementPeriod)
+    )
+    exists SystemEvent(
+        startsDuring($program.piMeasurementPeriod),
+        eventType == 'INBOUND_TRANSITION_OF_CARE',
+        encounterExternalId == $encounter.externalId
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Stage3cr'));
+end
+
+rule 'Year2019.Stage3cr.Denominator.SummaryOfCare'
+when
+    $program: Program(rules contains 'measure.Pi.2019.Stage3cr')
+    $encounter: Encounter(
+        startsDuring($program.piMeasurementPeriod)
+    )
+    exists ClinicalDocument(
+        $encounter.stopDatetime == null ||
+        startsBefore($encounter.stopDatetime),
+        documentType == 'INBOUND_SUMMARY_OF_CARE',
+        encounterExternalId == $encounter.externalId
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Stage3cr'));
+end
+
+rule 'Year2019.Stage3cr.Success.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: encounter, measure == 'Year2019.Stage3cr')
+    (
+        exists SystemEvent(
+            startsDuringYear($program.piMeasurementPeriod),
+            startsOnOrAfter($encounter.startDatetime),
+            eventType == 'MEDICATION_LIST_RECONCILIATION' ||
+            eventType == 'MEDICATION_LIST_RECONCILIATION_STAGE_3',
+            encounterExternalId == $encounter.externalId
+        ) and exists SystemEvent (
+            startsDuringYear($program.piMeasurementPeriod),
+            startsOnOrAfter($encounter.startDatetime),
+            eventType == 'ALLERGY_LIST_RECONCILIATION' ||
+            eventType == 'ALLERGY_LIST_RECONCILIATION_STAGE_3',
+            encounterExternalId == $encounter.externalId
+        ) and exists SystemEvent (
+            startsDuringYear($program.piMeasurementPeriod),
+            startsOnOrAfter($encounter.startDatetime),
+            eventType == 'PROBLEM_LIST_RECONCILIATION' ||
+            eventType == 'PROBLEM_LIST_RECONCILIATION_STAGE_3',
+            encounterExternalId == $encounter.externalId
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatusesForMatchingProviders($program, $encounter, 'Year2019.Stage3cr', MeasureStatusValue.SUCCESS, "performance_met", providers);
+end
+
+rule 'Year2019.Stage3cr.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $encounter: encounter, measure == 'Year2019.Stage3cr')
+then
+    controlSet.addEncounterMeasureStatusesForMatchingProviders($program, $encounter, 'Year2019.Stage3cr', MeasureStatusValue.GAP, "performance_not_met", providers);
+end

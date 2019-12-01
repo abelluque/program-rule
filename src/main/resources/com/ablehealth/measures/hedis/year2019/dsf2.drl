@@ -1,0 +1,201 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import accumulate com.ablehealth.functions.EarliestClinicalActivityAccumulateFunction earliestClinicalActivity;
+
+global PatientResults controlSet;
+
+declare HedisDsfEarliestScreening
+  screening: ClinicalActivity
+end
+
+rule 'Year2019.Hedis.Dsf2.FirstScreening'
+when
+  $program: Program(rules contains 'measure.Hedis.2019.Dsf2')
+  $earliestScreening: ClinicalActivity() from accumulate (
+    $c: ClinicalActivity(
+      startsDuring($program.measurementPeriod) &&
+      (
+        (
+          withValueSet("HedisYear2019", "BECK_DEPRESSION_INVENTORY_FAST_SCREEN_TOTAL_SCORE_BDI") &&
+          resultAsDecimal >= 4
+        ) ||
+        (
+          withValueSet("HedisYear2019", "BECK_DEPRESSION_INVENTORY_II_TOTAL_SCORE_BDI") &&
+          resultAsDecimal >= 14
+        ) ||
+        (
+          withValueSet("HedisYear2019", "CENTER_FOR_EPIDEMIOLOGIC_STUDIES_DEPRESSION_SCALE_REVISED_TOTAL_SCORE_CESD_R") &&
+          resultAsDecimal >= 10
+        ) ||
+        (
+          withValueSet("HedisYear2019", "EDINBURGH_POSTNATAL_DEPRESSION_SCALE_EPDS") &&
+          resultAsDecimal >= 9
+        ) ||
+        (
+          withValueSet("HedisYear2019", "GERIATRIC_DEPRESSION_SCALE_GDS_SHORT_VERSION_TOTAL") &&
+          resultAsDecimal >= 5
+        ) ||
+        (
+          withValueSet("HedisYear2019", "GERIATRIC_DEPRESSION_SCALE_GDS_TOTAL") &&
+          resultAsDecimal >= 10
+        ) ||
+        (
+          withValueSet("HedisYear2019", "PATIENT_HEALTH_QUESTIONNAIRE_2_ITEM_PHQ_2_TOTAL_SCORE_REPORTED") &&
+          resultAsDecimal >= 3
+        ) ||
+        (
+          withValueSet("HedisYear2019", "PATIENT_HEALTH_QUESTIONNAIRE_9_ITEM_PHQ_9_TOTAL_SCORE_REPORTED") &&
+          resultAsDecimal >= 5
+        ) ||
+        (
+          withValueSet("HedisYear2019", "PATIENT_HEALTH_QUESTIONNAIRE_9_MODIFIED_FOR_TEENS_TOTAL_SCORE_REPORTED_PHQ_TEEN") &&
+          resultAsDecimal >= 5
+        ) ||
+        (
+          withValueSet("HedisYear2019", "PROMIS_29_DEPRESSION_SCORE_T_SCORE") &&
+          resultAsDecimal >= 52.5
+        ) ||
+        (
+          withValueSet("HedisYear2019", "MY_MOOD_MONITOR_TOTAL_SCORE_M3") &&
+          resultAsDecimal >= 5
+        )
+      )
+    ),
+    earliestClinicalActivity($c)
+  )
+then
+  insert(new HedisDsfEarliestScreening($earliestScreening));
+end
+
+rule 'Year2019.Hedis.Dsf2.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2019.Dsf2')
+    $patient: Patient(getAgeInYearsAt($program.measurementPeriod.start) >= 12)
+    HedisDsfEarliestScreening($earliestScreening: screening)
+then
+    insert(new PatientDenominator($program, $patient, 'Year2019.Dsf2'));
+end
+
+rule 'Year2019.Hedis.Dsf2.ExclusionReasons.exclusion_1'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Dsf2')
+    exists Diagnosis(
+        overlaps($program.measurementPeriod),
+        withValueSet("HedisYear2019", "DEPRESSION") ||
+        withValueSet("HedisYear2019", "BIPOLAR_DISORDER")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Dsf2', MeasureStatusValue.EXCLUSION, 'exclusion_1');
+end
+
+rule 'Year2019.Hedis.Dsf2.ExclusionReasons.exclusion_2'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Dsf2')
+    exists ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("HedisYear2019", "HOSPICE")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Dsf2', MeasureStatusValue.EXCLUSION, 'exclusion_2');
+end
+
+rule 'Year2019.Hedis.Dsf2.SuccessReasons.PerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Dsf2')
+    HedisDsfEarliestScreening($earliestScreening: screening)
+    (
+      (
+        $followUpVisit: ClinicalActivity(
+          startsDuring($earliestScreening.startDate,$earliestScreening.startDate.plusDays(30)),
+          withValueSet("HedisYear2019", "FOLLOW_UP_VISIT")
+        )
+        and exists Diagnosis(
+          startsDuring($followUpVisit),
+          withValueSet("HedisYear2019", "DEPRESSION_OR_OTHER_BEHAVIORAL_HEALTH_CONDITION")
+        )
+      )
+      or (
+        $depressionEncounter: ClinicalActivity(
+          startsDuring($earliestScreening.startDate,$earliestScreening.startDate.plusDays(30)),
+          withValueSet("HedisYear2019", "DEPRESSION_CASE_MANAGEMENT_ENCOUNTER")
+        )
+        and exists Diagnosis(
+          startsDuring($depressionEncounter),
+          withValueSet("HedisYear2019", "DEPRESSION") ||
+          withValueSet("HedisYear2019", "SYMPTOMS_OF_DEPRESSION")
+        )
+      )
+      or exists ClinicalActivity(
+        startsDuring($earliestScreening.startDate,$earliestScreening.startDate.plusDays(30)),
+        withValueSet("HedisYear2019", "BEHAVIORAL_HEALTH_ENCOUNTER")
+      )
+      or exists Medication(
+        startsDuring($earliestScreening.startDate,$earliestScreening.startDate.plusDays(30)),
+        prescribed == true,
+        withValueSet("HedisYear2019", "ANTIDEPRESSANT_MEDICATIONS") ||
+        withValueSet("NcqaYear2019", "ANTIDEPRESSANT_MEDICATIONS")
+      )
+      or exists ClinicalActivity(
+        startsDuring($earliestScreening.startDate,$earliestScreening.startDate.plusDays(30)),
+        (
+          (
+            withValueSet("HedisYear2019", "BECK_DEPRESSION_INVENTORY_FAST_SCREEN_TOTAL_SCORE_BDI") &&
+            resultAsDecimal < 4
+          ) ||
+          (
+            withValueSet("HedisYear2019", "BECK_DEPRESSION_INVENTORY_II_TOTAL_SCORE_BDI") &&
+            resultAsDecimal < 14
+          ) ||
+          (
+            withValueSet("HedisYear2019", "CENTER_FOR_EPIDEMIOLOGIC_STUDIES_DEPRESSION_SCALE_REVISED_TOTAL_SCORE_CESD_R") &&
+            resultAsDecimal < 10
+          ) ||
+          (
+            withValueSet("HedisYear2019", "EDINBURGH_POSTNATAL_DEPRESSION_SCALE_EPDS") &&
+            resultAsDecimal < 9
+          ) ||
+          (
+            withValueSet("HedisYear2019", "GERIATRIC_DEPRESSION_SCALE_GDS_SHORT_VERSION_TOTAL") &&
+            resultAsDecimal < 5
+          ) ||
+          (
+            withValueSet("HedisYear2019", "GERIATRIC_DEPRESSION_SCALE_GDS_TOTAL") &&
+            resultAsDecimal < 10
+          ) ||
+          (
+            withValueSet("HedisYear2019", "PATIENT_HEALTH_QUESTIONNAIRE_2_ITEM_PHQ_2_TOTAL_SCORE_REPORTED") &&
+            resultAsDecimal < 3
+          ) ||
+          (
+            withValueSet("HedisYear2019", "PATIENT_HEALTH_QUESTIONNAIRE_9_ITEM_PHQ_9_TOTAL_SCORE_REPORTED") &&
+            resultAsDecimal < 5
+          ) ||
+          (
+            withValueSet("HedisYear2019", "PATIENT_HEALTH_QUESTIONNAIRE_9_MODIFIED_FOR_TEENS_TOTAL_SCORE_REPORTED_PHQ_TEEN") &&
+            resultAsDecimal < 5
+          ) ||
+          (
+            withValueSet("HedisYear2019", "PROMIS_29_DEPRESSION_SCORE_T_SCORE") &&
+            resultAsDecimal < 52.5
+          ) ||
+          (
+            withValueSet("HedisYear2019", "MY_MOOD_MONITOR_TOTAL_SCORE_M3") &&
+            resultAsDecimal < 5
+          )
+        )
+      )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Dsf2', MeasureStatusValue.SUCCESS, 'performance_met');
+end
+
+rule 'Year2019.Hedis.Dsf2.GapReasons.PerformanceNotMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Dsf2')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Dsf2', MeasureStatusValue.GAP, 'performance_not_met');
+end

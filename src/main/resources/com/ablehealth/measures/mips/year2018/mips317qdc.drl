@@ -1,0 +1,101 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2018.Mips317qdc.Denominator'
+when
+  $program: Program(rules contains 'measure.Mips.2018.Mips317qdc')
+  $encounter: ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    placeOfService != '02',
+    codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+    withValueSet("MipsYear2018", "MIPS_317_ENCOUNTER")
+  )
+  $patient: Patient(getAgeInYearsAt($encounter.startDate) >= 18)
+then
+  insert(new EncounterDenominator($program, $encounter, 'Year2018.Mips317qdc'));
+end
+
+rule 'Year2018.Mips317qdc.Exclusion.exclusion_1'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips317qdc')
+  $patient: Patient()
+  (
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2018", "HYPERTENSION_EXCLUSION")
+    )
+    or exists Diagnosis(
+      overlaps($program.measurementPeriod),
+      withValueSet("VsacYear2018", "DIAGNOSIS_OF_HYPERTENSION")
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips317qdc', MeasureStatusValue.EXCLUSION, "exclusion_1");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips317qdc', MeasureStatusValue.EXCLUSION, "exclusion_1");
+end
+
+rule 'Year2018.Mips317qdc.Success.G8783'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips317qdc')
+  $patient: Patient()
+  exists ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    withValueSet("MipsYear2018", "PERFORMANCE_MET_G8783")
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips317qdc', MeasureStatusValue.SUCCESS, "G8783");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips317qdc', MeasureStatusValue.SUCCESS, "G8783");
+end
+
+rule 'Year2018.Mips317qdc.Success.G8950'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips317qdc')
+  $patient: Patient()
+  exists ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    withValueSet("MipsYear2018", "PERFORMANCE_MET_G8950")
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips317qdc', MeasureStatusValue.SUCCESS, "G8950");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips317qdc', MeasureStatusValue.SUCCESS, "G8950");
+end
+
+rule 'Year2018.Mips317qdc.Exception.G9745'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips317qdc')
+  $patient: Patient()
+  exists ClinicalActivity(
+    startsDuring($encounter),
+    withValueSet("MipsYear2018", "DENOMINATOR_EXCEPTION_G9745")
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips317qdc', MeasureStatusValue.EXCEPTION, "G9745");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips317qdc', MeasureStatusValue.EXCEPTION, "G9745");
+end
+
+rule 'Year2018.Mips317qdc.Gap.G8952'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips317qdc')
+  $patient: Patient()
+  exists ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    withValueSet("MipsYear2018", "PERFORMANCE_NOT_MET_G8952")
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips317qdc', MeasureStatusValue.GAP, "G8952");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips317qdc', MeasureStatusValue.GAP, "G8952");
+end
+
+rule 'Year2018.Mips317qdc.Gap.G8785'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips317qdc')
+  $patient: Patient()
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips317qdc', MeasureStatusValue.GAP, "G8785");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips317qdc', MeasureStatusValue.GAP, "G8785");
+end

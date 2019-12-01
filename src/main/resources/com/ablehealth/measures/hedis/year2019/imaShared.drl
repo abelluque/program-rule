@@ -1,0 +1,169 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+declare HedisImaYear2019SuccessMeningococcal
+end
+
+declare HedisImaYear2019SuccessTdapVaccine
+end
+
+declare HedisImaYear2019SuccessHpvVaccine
+end
+
+rule 'Year2019.Ima.Success.Meningococcal' 
+when
+	$patient: Patient()
+	exists ClinicalActivity(
+		startsDuring($patient.dateOfBirth.plusYears(11),$patient.dateOfBirth.plusYears(13)),
+		withValueSet("HedisYear2019", "MENINGOCOCCAL_VACCINE_ADMINISTERED")
+	)
+	or exists Medication(
+		startsDuring($patient.dateOfBirth.plusYears(11),$patient.dateOfBirth.plusYears(13)),
+		withValueSet("HedisYear2019", "MENINGOCOCCAL_VACCINE_ADMINISTERED")
+	)
+then
+	insert (new HedisImaYear2019SuccessMeningococcal());
+end
+
+rule 'Year2019.Ima.Success.TdapVaccine' 
+when
+	$patient: Patient()
+	exists ClinicalActivity(
+		startsDuring($patient.dateOfBirth.plusYears(10),$patient.dateOfBirth.plusYears(13)),
+		withValueSet("HedisYear2019", "TDAP_VACCINE_ADMINISTERED")
+	)
+	or exists Medication(
+		startsDuring($patient.dateOfBirth.plusYears(10),$patient.dateOfBirth.plusYears(13)),
+		withValueSet("HedisYear2019", "TDAP_VACCINE_ADMINISTERED")
+	)
+then
+	insert (new HedisImaYear2019SuccessTdapVaccine());
+end
+
+rule 'Year2019.Ima.Success.HpvVaccine' 
+when
+	$patient: Patient()
+	(
+		$encounterClinicalTwo: ClinicalActivity(
+			startsDuring($patient.dateOfBirth.plusYears(9),$patient.dateOfBirth.plusYears(13)),
+			withValueSet("HedisYear2019", "HPV_VACCINE_ADMINISTERED")
+		)
+		and  exists ClinicalActivity(
+			startsOnOrAfter($encounterClinicalTwo.startDate.plusDays(146)),
+			startsDuring($patient.dateOfBirth.plusYears(9),$patient.dateOfBirth.plusYears(13)),
+			withValueSet("HedisYear2019", "HPV_VACCINE_ADMINISTERED")
+		)
+	)
+	or(
+		$encounterClinicalThree: ClinicalActivity(
+			startsDuring($patient.dateOfBirth.plusYears(9),$patient.dateOfBirth.plusYears(13)),
+			withValueSet("HedisYear2019", "HPV_VACCINE_ADMINISTERED")
+		)
+		and $encounterAux: ClinicalActivity(
+			startsDuring($patient.dateOfBirth.plusYears(9),$patient.dateOfBirth.plusYears(13)),
+			startsOnOrAfter($encounterClinicalThree.startDate.plusDays(146)),
+			withValueSet("HedisYear2019", "HPV_VACCINE_ADMINISTERED")
+		) and exists ClinicalActivity(
+			startsDuring($patient.dateOfBirth.plusYears(9),$patient.dateOfBirth.plusYears(13)),
+			startsOnOrAfter($encounterAux.startDate.plusDays(1)),
+			withValueSet("HedisYear2019", "HPV_VACCINE_ADMINISTERED")
+		) 
+	)
+	or( $encounterMedicationTwo: Medication(
+			startsDuring($patient.dateOfBirth.plusYears(9),$patient.dateOfBirth.plusYears(13)),
+			withValueSet("HedisYear2019", "HPV_VACCINE_ADMINISTERED")
+		)
+		and exists Medication(
+			startsDuring($patient.dateOfBirth.plusYears(9),$patient.dateOfBirth.plusYears(13)),
+			startsOnOrAfter($encounterMedicationTwo.startDate.plusDays(146)),
+			withValueSet("HedisYear2019", "HPV_VACCINE_ADMINISTERED")
+		)
+	)
+	or(	$encounterMedicationThree: Medication(
+			startsDuring($patient.dateOfBirth.plusYears(9),$patient.dateOfBirth.plusYears(13)),
+			withValueSet("HedisYear2019", "HPV_VACCINE_ADMINISTERED")
+		)
+		and $encounterMedicationAux: Medication(
+			startsDuring($patient.dateOfBirth.plusYears(9),$patient.dateOfBirth.plusYears(13)),
+			startsOnOrAfter($encounterMedicationThree.startDate.plusDays(146)),	
+			withValueSet("HedisYear2019", "HPV_VACCINE_ADMINISTERED")
+		)
+		and exists Medication(
+			startsDuring($patient.dateOfBirth.plusYears(9),$patient.dateOfBirth.plusYears(13)),
+			startsOnOrAfter($encounterMedicationAux.startDate.plusDays(1)),
+			withValueSet("HedisYear2019", "HPV_VACCINE_ADMINISTERED")
+		)
+	)
+then
+	insert (new HedisImaYear2019SuccessHpvVaccine());
+end
+
+rule 'Year2019.Ima.Denominator'
+when
+	$program: Program(rules contains 'measure.Hedis.2019.Ima1' ||
+		rules contains 'measure.Hedis.2019.Ima2' ||
+		rules contains 'measure.Hedis.2019.Ima3' ||
+		rules contains 'measure.Hedis.2019.Ima4' ||
+		rules contains 'measure.Hedis.2019.Ima5')
+	$patient: Patient(getAgeInYearsAt($program.measurementPeriod.end) == 13)
+	not (exists ClinicalActivity(
+			startsDuring(
+				$program.measurementPeriod
+			),
+			withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+			withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+		)
+	)
+then
+	insert(new PatientDenominator($program, $patient, 'Year2019.Ima1'));
+	insert(new PatientDenominator($program, $patient, 'Year2019.Ima2'));
+	insert(new PatientDenominator($program, $patient, 'Year2019.Ima3'));
+	insert(new PatientDenominator($program, $patient, 'Year2019.Ima4'));
+	insert(new PatientDenominator($program, $patient, 'Year2019.Ima5'));
+end
+
+rule 'Year2019.Ima.Exclusion.exclusion_1'
+when
+	PatientDenominator($program: program, $patient: patient,$measure: measure,
+		measure == 'Year2019.Ima1' || 
+		measure == 'Year2019.Ima2' ||
+		measure == 'Year2019.Ima3' ||
+		measure == 'Year2019.Ima4' ||
+		measure == 'Year2019.Ima5')
+	(
+		exists Allergy(
+			startsOnOrBefore($patient.dateOfBirth.plusYears(13)),
+			withValueSet("HedisYear2019", "MENINGOCOCCAL_VACCINE_ADMINISTERED") ||
+			withValueSet("HedisYear2019", "TDAP_VACCINE_ADMINISTERED") ||
+			withValueSet("HedisYear2019", "HPV_VACCINE_ADMINISTERED")
+		)
+		or exists Diagnosis(
+			startsOnOrBefore($patient.dateOfBirth.plusYears(13)),
+			withValueSet("HedisYear2019", "ANAPHYLACTIC_REACTION_DUE_TO_VACCINATION")
+		)
+		or exists Diagnosis(
+			startsDuring($program.measurementPeriod.end.plusDays(1).minusMonths(63), $program.measurementPeriod.end),
+			withValueSet("HedisYear2019", "ANAPHYLACTIC_REACTION_DUE_TO_SERUM")
+		)
+	)
+then
+	controlSet.addPatientMeasureStatus($program, $patient, $measure, MeasureStatusValue.EXCLUSION, "exclusion_1");
+end
+
+rule 'Year2019.Ima.Gap.performance_not_met'
+when
+	PatientDenominator($program: program, $patient: patient, $measure: measure,
+		measure == 'Year2019.Ima1' || 
+		measure == 'Year2019.Ima2' ||
+		measure == 'Year2019.Ima3' ||
+		measure == 'Year2019.Ima4' ||
+		measure == 'Year2019.Ima5'
+	)
+then
+	controlSet.addPatientMeasureStatus($program, $patient, $measure, MeasureStatusValue.GAP, "performance_not_met");
+end

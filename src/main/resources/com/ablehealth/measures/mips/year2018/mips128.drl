@@ -1,0 +1,164 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+import accumulate com.ablehealth.functions.LatestClinicalActivityWithLowestResultAccumulateFunction latestClinicalActivityWithLowestResult;
+
+global PatientResults controlSet;
+
+rule 'Year2018.Mips128.Denominator'
+when
+  $program: Program(rules contains 'measure.Mips.2018.Mips128')
+  $encounter: ClinicalActivity(
+    withValueSet("MipsYear2018", "MIPS_128_ENCOUNTER"),
+    startsDuring($program.measurementPeriod),
+    placeOfService != '02',
+    codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95'
+  )
+  Patient(getAgeInYearsAt($encounter.startDate) >= 18)
+then
+  insert(new EncounterDenominator($program, $encounter, 'Year2018.Mips128'));
+end
+
+rule 'Year2018.Mips128.Exclusion.denominator_exclusion'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips128')
+  $patient: Patient()
+  (
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2018", "PATIENT_NOT_ELIGIBLE_G8422") || withValueSet("MipsYear2018", "PATIENT_NOT_ELIGIBLE_G8938") || withValueSet("MipsYear2018", "MIPS_HOSPICE_SERVICE") || withValueSet("VsacYear2018", "PALLIATIVE_CARE")
+    )
+    or exists Diagnosis(
+      overlaps($program.measurementPeriod),
+      withValueSet("VsacYear2018", "PREGNANCY")
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips128', MeasureStatusValue.EXCLUSION, "denominator_exclusion");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips128', MeasureStatusValue.EXCLUSION, 'denominator_exclusion');
+end
+
+rule 'Year2018.Mips128.Success.G8420'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips128')
+  $patient: Patient()
+  (
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2018", "PERFORMANCE_MET_G8420")
+    )
+    or exists ClinicalActivity(resultAsDecimal > 18.5 && resultAsDecimal < 25) from accumulate (
+      $c: ClinicalActivity(
+        startsDuring($encounter.startDate.minusMonths(12),$encounter.startDate),
+        withValueSet("VsacYear2018", "BMI_LOINC_VALUE")
+      ),
+      latestClinicalActivityWithLowestResult($c)
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips128', MeasureStatusValue.SUCCESS, "G8420");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips128', MeasureStatusValue.SUCCESS, 'G8420');
+end
+
+rule 'Year2018.Mips128.Success.G8417'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips128')
+  $patient: Patient()
+  (
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2018", "PERFORMANCE_MET_G8417")
+    )
+    or (
+      exists ClinicalActivity(resultAsDecimal >= 25) from accumulate (
+        $c: ClinicalActivity(
+          startsDuring($encounter.startDate.minusMonths(12),$encounter.startDate),
+          withValueSet("VsacYear2018", "BMI_LOINC_VALUE")
+        ),
+        latestClinicalActivityWithLowestResult($c)
+      )
+      and exists ClinicalActivity(
+        startsDuring($encounter.startDate.minusMonths(12),$encounter.startDate),
+        withValueSet("VsacYear2018", "ABOVE_NORMAL_FOLLOW_UP") || withValueSet("AbleYear2018", "ABOVE_NORMAL_BMI_FOLLOW_UP") || withValueSet("AbleYear2018", "WEIGHT_MANAGEMENT_REFERRAL")
+      )
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips128', MeasureStatusValue.SUCCESS, "G8417");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips128', MeasureStatusValue.SUCCESS, 'G8417');
+end
+
+rule 'Year2018.Mips128.Success.G8418'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips128')
+  $patient: Patient()
+  (
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2018", "PERFORMANCE_MET_G8418")
+    )
+    or (
+      exists ClinicalActivity(resultAsDecimal < 18.5) from accumulate (
+        $c: ClinicalActivity(
+          startsDuring($encounter.startDate.minusMonths(12),$encounter.startDate),
+          withValueSet("VsacYear2018", "BMI_LOINC_VALUE")
+        ),
+        latestClinicalActivityWithLowestResult($c)
+      )
+      and exists ClinicalActivity(
+        startsDuring($encounter.startDate.minusMonths(12),$encounter.startDate),
+        withValueSet("VsacYear2018", "BELOW_NORMAL_FOLLOW_UP") || withValueSet("AbleYear2018", "BELOW_NORMAL_BMI_FOLLOW_UP") || withValueSet("AbleYear2018", "WEIGHT_MANAGEMENT_REFERRAL")
+      )
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips128', MeasureStatusValue.SUCCESS, "G8418");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips128', MeasureStatusValue.SUCCESS, 'G8418');
+end
+
+rule 'Year2018.Mips128.Exception.G9716'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips128')
+  $patient: Patient()
+  exists ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    withValueSet("MipsYear2018", "DENOMINATOR_EXCEPTION_G9716")
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips128', MeasureStatusValue.EXCEPTION, "G9716");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips128', MeasureStatusValue.EXCEPTION, 'G9716');
+end
+
+rule 'Year2018.Mips128.Gap.G8419'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips128')
+  $patient: Patient()
+  (
+    exists ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2018", "PERFORMANCE_MET_G8418")
+    )
+    or exists ClinicalActivity(resultAsDecimal < 18.5 || resultAsDecimal >= 25) from accumulate (
+      $c: ClinicalActivity(
+        startsDuring($encounter.startDate.minusMonths(12),$encounter.startDate),
+        withValueSet("VsacYear2018", "BMI_LOINC_VALUE")
+      ),
+      latestClinicalActivityWithLowestResult($c)
+    )
+  )
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips128', MeasureStatusValue.GAP, "G8419");
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips128', MeasureStatusValue.GAP, 'G8419');
+end
+
+rule 'Year2018.Mips128.Gap.G8421'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips128')
+  $patient: Patient()
+then
+  controlSet.addPatientMeasureStatus($program, $patient, 'Year2018.Mips128', MeasureStatusValue.GAP, 'G8421');
+  controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId, 'Year2018.Mips128', MeasureStatusValue.GAP, 'G8421');
+end

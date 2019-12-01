@@ -1,0 +1,231 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+declare Year2019HedisSpcEncounterWithAdvancedIllness
+  encounter: ClinicalActivity
+end
+
+declare Year2019HedisSpcDenominator
+end
+
+declare Year2019HedisSpcExclusion1
+end
+
+declare Year2019HedisSpcExclusion2
+end
+
+declare Year2019HedisSpcExclusion3
+end
+
+rule 'Year2019.Hedis.Spc.EncounterWithAdvancedIllness'
+when
+  $program: Program(
+    rules contains 'measure.Hedis.2019.Spc1' ||
+    rules contains 'measure.Hedis.2019.Spc2'
+  )
+  $encounter: ClinicalActivity(
+    startsDuring($program.measurementPeriod),
+    withValueSet("HedisYear2019", "OUTPATIENT") ||
+    withValueSet("HedisYear2019", "OBSERVATION") ||
+    withValueSet("HedisYear2019", "ED") ||
+    withValueSet("HedisYear2019", "NONACUTE_INPATIENT")
+  )
+  exists Diagnosis(
+    startsDuring($encounter),
+    withValueSet("HedisYear2019", "ADVANCED_ILLNESS")
+  )
+then
+  insert(new Year2019HedisSpcEncounterWithAdvancedIllness($encounter));
+end
+
+rule 'Year2019.Spc.Denominator'
+when
+    $program: Program(
+      rules contains 'measure.Hedis.2019.Spc1' ||
+      rules contains 'measure.Hedis.2019.Spc2'
+    )
+    $patient: Patient(
+      (
+        sex == "female" &&
+        getAgeInYearsAt($program.measurementPeriod.end) >= 40 &&
+        getAgeInYearsAt($program.measurementPeriod.end) < 75
+      ) ||
+      (
+        sex == "male" &&
+        getAgeInYearsAt($program.measurementPeriod.end) >= 21 &&
+        getAgeInYearsAt($program.measurementPeriod.end) < 75
+      )
+    )
+    (
+      exists ClinicalActivity(
+        startsDuring($program.measurementPeriod.start.minusMonths(12),$program.measurementPeriod.end.minusMonths(12)),
+        withValueSet("HedisYear2019", "PCI") ||
+        withValueSet("HedisYear2019", "CABG") ||
+        withValueSet("HedisYear2019", "OTHER_REVASCULARIZATION")
+      )
+      or (
+        $miEncounter: ClinicalActivity(
+          startsDuring($program.measurementPeriod.start.minusMonths(12),$program.measurementPeriod.end.minusMonths(12)),
+          withValueSet("HedisYear2019", "INPATIENT_STAY")
+        )
+        and exists Diagnosis(
+          startsDuring($miEncounter),
+          withValueSet("HedisYear2019", "MI")
+        )
+      )
+      or (
+        (
+          $ivdEncounter1: ClinicalActivity(
+            startsDuring($program.measurementPeriod.start.minusMonths(12),$program.measurementPeriod.end.minusMonths(12)) &&
+            (
+              withValueSet("HedisYear2019", "OUTPATIENT") ||
+              withValueSet("HedisYear2019", "TELEPHONE_VISITS") ||
+              withValueSet("HedisYear2019", "ONLINE_ASSESSMENTS") ||
+              (
+                withValueSet("HedisYear2019", "ACUTE_INPATIENT") &&
+                placeOfService != '02' &&
+                codeModifiers not contains 'GT' && not contains '95'
+              )
+            )
+          )
+          and exists Diagnosis(
+            startsDuring($ivdEncounter1),
+            withValueSet("HedisYear2019", "IVD")
+          )
+        ) and (
+          $ivdEncounter2: ClinicalActivity(
+            startsDuring($program.measurementPeriod) &&
+            (
+              withValueSet("HedisYear2019", "OUTPATIENT") ||
+              withValueSet("HedisYear2019", "TELEPHONE_VISITS") ||
+              withValueSet("HedisYear2019", "ONLINE_ASSESSMENTS") ||
+              (
+                withValueSet("HedisYear2019", "ACUTE_INPATIENT") &&
+                placeOfService != '02' &&
+                codeModifiers not contains 'GT' && not contains '95'
+              )
+            )
+          )
+          and exists Diagnosis(
+            startsDuring($ivdEncounter2),
+            withValueSet("HedisYear2019", "IVD")
+          )
+        ) and (
+          $ivdEncounter3: ClinicalActivity(
+            startsDuring($program.measurementPeriod.start.minusMonths(12),$program.measurementPeriod.end),
+            withValueSet("HedisYear2019", "OUTPATIENT") ||
+            withValueSet("HedisYear2019", "ACUTE_INPATIENT"),
+            placeOfService != '02',
+            codeModifiers not contains 'GT' && not contains '95'
+          )
+          and exists Diagnosis(
+            startsDuring($ivdEncounter3),
+            withValueSet("HedisYear2019", "IVD")
+          )
+        )
+      )
+    )
+    not ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("HedisYear2019", "HOSPICE")
+    )
+then
+    insert(new Year2019HedisSpcDenominator());
+end
+
+rule 'Year2019.Spc.Exclusion.exclusion_1'
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Spc1' ||
+      measure == 'Year2019.Spc2'
+    )
+    (
+      exists Diagnosis(
+        startsDuring($program.measurementPeriod),
+        withValueSet("HedisYear2019", "MUSCULAR_PAIN_AND_DISEASE")
+      )
+      or exists Diagnosis(
+        startsDuring($program.measurementPeriod.start.minusMonths(12),$program.measurementPeriod.end),
+        withValueSet("HedisYear2019", "CIRRHOSIS") ||
+        withValueSet("HedisYear2019", "ESRD")
+      )
+      or exists ClinicalActivity(
+        startsDuring($program.measurementPeriod.start.minusMonths(12),$program.measurementPeriod.end),
+        withValueSet("HedisYear2019", "ESRD")
+      )
+    )
+then
+    insert(new Year2019HedisSpcExclusion1());
+end
+
+rule 'Year2019.Spc.Exclusion.exclusion_2'
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Spc1' ||
+      measure == 'Year2019.Spc2'
+    )
+    (
+      exists Diagnosis(
+        startsDuring($program.measurementPeriod.start.minusMonths(12),$program.measurementPeriod.end),
+        withValueSet("HedisYear2019", "PREGNANCY")
+      )
+      or exists ClinicalActivity(
+        startsDuring($program.measurementPeriod.start.minusMonths(12),$program.measurementPeriod.end),
+        withValueSet("HedisYear2019", "IVF")
+      )
+      or exists Medication(
+        startsDuring($program.measurementPeriod.start.minusMonths(12),$program.measurementPeriod.end),
+        withValueSet("NcqaYear2019", "ESTROGEN_AGONISTS_MEDICATIONS"),
+        prescribed == true
+      )
+    )
+then
+    insert(new Year2019HedisSpcExclusion2());
+end
+
+rule 'Year2019.Spc.Exclusion.exclusion_3'
+when
+    PatientDenominator(
+      $program: program,
+      $patient: patient,
+      measure == 'Year2019.Spc1' ||
+      measure == 'Year2019.Spc2'
+    )
+    Patient(getAgeInYearsAt($program.measurementPeriod.end) >= 66)
+    (
+      exists ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("HedisYear2019", "FRAILTY")
+      )
+      or exists Diagnosis(
+        startsDuring($program.measurementPeriod),
+        withValueSet("HedisYear2019", "FRAILTY")
+      )
+    )
+    (
+      (
+        $illnessEncounter: ClinicalActivity(
+          startsDuring($program.measurementPeriod),
+          withValueSet("HedisYear2019", "ACUTE_INPATIENT")
+        )
+        and exists Diagnosis(
+          startsDuring($illnessEncounter),
+          withValueSet("HedisYear2019", "ADVANCED_ILLNESS")
+        )
+      )
+      or ArrayList(size >= 2) from collect(
+        Year2019HedisSpcEncounterWithAdvancedIllness($encounter: encounter)
+      )
+    )
+then
+    insert(new Year2019HedisSpcExclusion3());
+end

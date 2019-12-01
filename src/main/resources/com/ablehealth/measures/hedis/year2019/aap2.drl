@@ -1,0 +1,38 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Aap2.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2019.Aap2')
+    $patient: Patient(
+      getAgeInYearsAt($program.measurementPeriod.end) >= 20
+    )
+then
+    insert(new PatientDenominator($program, $patient, 'Year2019.Aap2'));
+end
+
+rule 'Year2019.Aap2.Success.performance_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Aap2')
+    exists ClinicalActivity(
+        startsDuring($program.measurementPeriod.start.minusYears(2),$program.measurementPeriod.end),
+        withValueSet("HedisYear2019", "AMBULATORY_VISITS") ||
+        withValueSet("HedisYear2019", "OTHER_AMBULATORY_VISITS") ||
+        withValueSet("HedisYear2019", "TELEPHONE_VISITS") ||
+        withValueSet("HedisYear2019", "ONLINE_ASSESSMENTS")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Aap2', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Aap2.Gap.performance_not_met'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Aap2')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Aap2', MeasureStatusValue.GAP, "performance_not_met");
+end

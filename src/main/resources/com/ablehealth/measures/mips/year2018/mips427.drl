@@ -1,0 +1,41 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2018.Mips427.Denominator'
+when
+  $program: Program(rules contains 'measure.Mips.2018.Mips427')
+  $encounter: ClinicalActivity(
+      startsDuring($program.measurementPeriod),
+      withValueSet("MipsYear2018", "MIPS_427_PROCEDURE")
+  )
+  exists ClinicalActivity(
+    startsDuring($encounter),
+    withValueSet("MipsYear2018", "MIPS_427_TRANSFERRED_DIRECTLY_TO_CCU")
+  )
+then
+  insert(new EncounterDenominator($program, $encounter, 'Year2018.Mips427'));
+end
+
+rule 'Year2018.Mips427.Success.0583F'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips427')
+  exists ClinicalActivity(
+    startsDuring($encounter),
+    withValueSet("MipsYear2018", "PERFORMANCE_MET_0583F"),
+    codeModifiers.isEmpty
+  )
+then
+  controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips427', MeasureStatusValue.SUCCESS, "0583F");
+end
+
+rule 'Year2018.Mips427.Gap.0583F-8P'
+when
+  EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2018.Mips427')
+then
+  controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2018.Mips427', MeasureStatusValue.GAP, "0583F-8P");
+end

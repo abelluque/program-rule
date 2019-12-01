@@ -1,0 +1,112 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Cms125v7.Denominator'
+when
+    $program: Program(rules contains 'measure.Cms.2019.Cms125v7')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        endsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "OFFICE_VISIT") ||
+        withValueSet("VsacYear2019", "ANNUAL_WELLNESS_VISIT") ||
+        withValueSet("VsacYear2019", "PREVENTIVE_CARE_SERVICES___ESTABLISHED_OFFICE_VISIT_18_AND_UP") ||
+        withValueSet("VsacYear2019", "PREVENTIVE_CARE_SERVICES_INITIAL_OFFICE_VISIT_18_AND_UP") ||
+        withValueSet("VsacYear2019", "HOME_HEALTHCARE_SERVICES")
+    )
+    exists Patient(
+        getAgeInYearsAt($program.measurementPeriod.start) >= 51,
+        getAgeInYearsAt($program.measurementPeriod.start) < 74,
+        sex == "female"
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Cms125v7'));
+end
+
+rule 'Year2019.Cms125v7.Exclusion.exclusion_mastectomy'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms125v7')
+    $patient: Patient()
+    (
+        exists Diagnosis(
+            startsBefore($program.measurementPeriod.end),
+            withValueSet("VsacYear2019", "HISTORY_OF_BILATERAL_MASTECTOMY")
+        ) or exists ClinicalActivity(
+            endsBefore($program.measurementPeriod.end),
+            withValueSet("VsacYear2019", "BILATERAL_MASTECTOMY")
+        ) or accumulate(
+            ClinicalActivity(
+                endsBefore($program.measurementPeriod.end),
+                withValueSet("VsacYear2019", "UNILATERAL_MASTECTOMY")
+            );
+            $clinicalActivityCount: count(1);
+            $clinicalActivityCount == 2
+        ) or (
+            exists ClinicalActivity(
+                startsBefore($program.measurementPeriod.end),
+                withValueSet("VsacYear2019", "STATUS_POST_LEFT_MASTECTOMY") || withValueSet("VsacYear2019", "UNILATERAL_MASTECTOMY_UNSPECIFIED_LATERALITY"),
+                withChildValueSet("VsacYear2019", "LEFT")
+            ) and exists ClinicalActivity(
+                startsBefore($program.measurementPeriod.end),
+                withValueSet("VsacYear2019", "STATUS_POST_RIGHT_MASTECTOMY") || withValueSet("VsacYear2019", "UNILATERAL_MASTECTOMY_UNSPECIFIED_LATERALITY"),
+                withChildValueSet("VsacYear2019", "RIGHT")
+            )
+        )
+    )
+
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms125v7', MeasureStatusValue.EXCLUSION, "exclusion_mastectomy");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms125v7', MeasureStatusValue.EXCLUSION, "exclusion_mastectomy");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms125v7', MeasureStatusValue.EXCLUSION, "exclusion_mastectomy");
+end
+
+rule 'Year2019.Cms125v7.Exclusion.exclusion_hospice'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms125v7')
+    $patient: Patient()
+    exists ClinicalActivity(
+        endsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "ENCOUNTER_INPATIENT"),
+        withChildValueSet("VsacYear2019", "DISCHARGED_TO_HEALTH_CARE_FACILITY_FOR_HOSPICE_CARE") ||
+        withChildValueSet("VsacYear2019", "DISCHARGED_TO_HOME_FOR_HOSPICE_CARE")
+    )
+    or exists Order(
+        startsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "HOSPICE_CARE_AMBULATORY")
+    ) or exists ClinicalActivity(
+        overlaps($program.measurementPeriod),
+        withValueSet("VsacYear2019", "HOSPICE_CARE_AMBULATORY")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms125v7', MeasureStatusValue.EXCLUSION, "exclusion_hospice");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms125v7', MeasureStatusValue.EXCLUSION, "exclusion_hospice");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms125v7', MeasureStatusValue.EXCLUSION, "exclusion_hospice");
+end
+
+rule 'Year2019.Cms125v7.Success.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms125v7')
+    $patient: Patient()
+    exists ClinicalActivity(
+        endsDuring($program.measurementPeriod.end.minusMonths(27), $program.measurementPeriod.end),
+        withValueSet("VsacYear2019", "MAMMOGRAPHY")
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms125v7', MeasureStatusValue.SUCCESS, "performance_met");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms125v7', MeasureStatusValue.SUCCESS, "performance_met");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms125v7', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Cms125v7.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms125v7')
+    $patient: Patient()
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Cms125v7', MeasureStatusValue.GAP, "performance_not_met");
+    controlSet.addGroupPatientMeasureStatus($program, $patient, $encounter.groupExternalId,'Year2019.Cms125v7', MeasureStatusValue.GAP, "performance_not_met");
+    controlSet.addProviderPatientMeasureStatus($program, $patient, $encounter.providerExternalId,'Year2019.Cms125v7', MeasureStatusValue.GAP, "performance_not_met");
+end

@@ -1,0 +1,108 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips065.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips065')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        withValueSet("MipsYear2019", "MIPS_065_ENCOUNTER")
+    )
+    exists Patient(
+        getAgeInMonthsAt($encounter.startDate) >= 3,
+        getAgeInYearsAt($encounter.startDate) < 18
+    )
+    exists Diagnosis(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "UPPER_RESPIRATORY_INFECTION")
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips065'));
+end
+
+rule 'Year2019.Mips065.Exclusion.exclusion_1'
+when
+     EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips065')
+
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter.startDate, $encounter.startDate.plusDays(3)),
+            withValueSet("MipsYear2019", "MEDICAL_REASON_FOR_ANTIBIOTIC")
+        ) ||
+        exists Diagnosis(
+            startsDuring($encounter.startDate, $encounter.startDate.plusDays(3)),
+            withValueSet("VsacYear2019", "COMPETING_CONDITIONS_FOR_RESPIRATORY_CONDITIONS")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips065', MeasureStatusValue.EXCLUSION, "exclusion_1");
+end
+
+rule 'Year2019.Mips065.Exclusion.exclusion_2'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips065')
+
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter.startDate.minusDays(30), $encounter.startDate.minusDays(1)),
+            withValueSet("MipsYear2019", "EXISTING_USE_OF_ANTIBIOTIC")
+        ) ||
+        exists Medication(
+            startsDuring($encounter.startDate.minusDays(30), $encounter.startDate.minusDays(1)),
+            withValueSet("VsacYear2019", "ANTIBIOTIC_MEDICATIONS_FOR_PHARYNGITIS")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips065', MeasureStatusValue.EXCLUSION, "exclusion_2");
+end
+
+rule 'Year2019.Mips065.Exclusion.exclusion_3'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips065')
+
+    (
+        exists ClinicalActivity(
+            startsDuring($program.measurementPeriod),
+            withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE")
+        ) ||
+        exists ClinicalActivity(
+            overlaps($program.measurementPeriod),
+            withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips065', MeasureStatusValue.EXCLUSION, "exclusion_3");
+end
+
+rule 'Year2019.Mips065.Success.MipsG8708'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips065')
+
+    (
+        exists ClinicalActivity(
+            startsDuring($encounter.startDate, $encounter.startDate.plusDays(3)),
+            withValueSet("MipsYear2019", "PERFORMANCE_MET_G8708")
+        ) ||
+        not Medication(
+            prescribed == true,
+            providerExternalId == $encounter.providerExternalId,
+            startsDuring($encounter.startDate, $encounter.startDate.plusDays(3)),
+            withValueSet("VsacYear2019", "ANTIBIOTIC_MEDICATIONS_FOR_PHARYNGITIS")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips065', MeasureStatusValue.SUCCESS, "G8708");
+end
+
+rule 'Year2019.Mips065.Gaps.MipsG8710'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips065')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips065', MeasureStatusValue.GAP, "G8710");
+end
+

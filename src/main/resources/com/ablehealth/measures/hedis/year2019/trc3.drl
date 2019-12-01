@@ -1,0 +1,63 @@
+package com.ablehealth.measures.hedis.year2019;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Trc3.Denominator'
+when
+	$program: Program(rules contains 'measure.Hedis.2019.Trc3')
+	$patient: Patient(
+		getAgeInYearsAt($program.measurementPeriod.end) >= 18
+	)
+	$encounter: ClinicalActivity(
+		startsDuring(
+			$program.measurementPeriod.start,
+			$program.measurementPeriod.end.minusDays(30)
+		),
+		withValueSet("HedisYear2019", "INPATIENT_STAY") ||
+		withValueSet("AbleYear2019", "ABLE_DISCHARGE")
+	)
+	and not (
+		ClinicalActivity(
+			startsDuring($encounter.startDate.plusDays(1), $encounter.startDate.plusDays(30)),
+			withValueSet("HedisYear2019", "INPATIENT_STAY") ||
+			withValueSet("AbleYear2019", "ABLE_DISCHARGE")
+		)
+	)
+	and not (
+		ClinicalActivity(
+			startsDuring($program.measurementPeriod),
+			withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+			withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+		)
+	)
+then
+	insert(new EncounterDenominator($program, $encounter, 'Year2019.Trc3'));
+end
+
+rule 'Year2019.Trc3.Success.performance_met'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Trc3')
+	and exists (
+		ClinicalActivity(
+			startsDuring($program.measurementPeriod),
+			startsDuring($encounter.stopDate.plusDays(1), $encounter.stopDate.plusDays(30)),
+			withValueSet("HedisYear2019", "OUTPATIENT") ||
+			withValueSet("HedisYear2019", "TELEPHONE_VISITS") ||
+			withValueSet("HedisYear2019", "TRANSITIONAL_CARE_MANAGEMENT_SERVICES")
+		)
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Trc3', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Trc3.Gap.performance_not_met'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Trc3')
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Trc3', MeasureStatusValue.GAP, "performance_not_met");
+end
+

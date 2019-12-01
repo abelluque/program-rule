@@ -1,0 +1,99 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips131.Denominator'
+when
+    $program: Program(rules contains 'measure.Mips.2019.Mips131')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        placeOfService != '02',
+        codeModifiers not contains 'GQ' && not contains 'GT' && not contains '95',
+        withValueSet("MipsYear2019", "MIPS_131_ENCOUNTER")
+    )
+    Patient(
+        getAgeInYearsAt($encounter.startDate) >= 18
+    )
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips131'));
+end
+
+rule 'Year2019.Mips131.Success.G8730'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips131')
+    $patient: Patient()
+    and exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "PERFORMANCE_MET_G8730")
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips131', MeasureStatusValue.SUCCESS, "G8730");
+end
+
+rule 'Year2019.Mips131.Success.G8731'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips131')
+    $patient: Patient()
+    and exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "PERFORMANCE_MET_G8731") ||
+        (
+            withValueSet("AbleYear2019", "STANDARDIZED_PAIN_ASSESSMENT_TOOL") &&
+            resultAsDecimal == 0
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips131', MeasureStatusValue.SUCCESS, "G8731");
+end
+
+rule 'Year2019.Mips131.Exception.G8442'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips131')
+    $patient: Patient()
+    and exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G8442")
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips131', MeasureStatusValue.EXCEPTION, "G8442");
+end
+
+rule 'Year2019.Mips131.Exception.G8939'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips131')
+    $patient: Patient()
+    and exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G8939")
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips131', MeasureStatusValue.EXCEPTION, "G8939");
+end
+
+rule 'Year2019.Mips131.Gap.G8509'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips131')
+    $patient: Patient()
+    and exists ClinicalActivity(
+        startsDuring($encounter),
+        withValueSet("MipsYear2019", "PERFORMANCE_NOT_MET_G8509") ||
+        (
+            withValueSet("AbleYear2019", "STANDARDIZED_PAIN_ASSESSMENT_TOOL") &&
+            resultAsDecimal > 0
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips131', MeasureStatusValue.GAP, "G8509");
+end
+
+rule 'Year2019.Mips131.Gap.G8732'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips131')
+    $patient: Patient()
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips131', MeasureStatusValue.GAP, "G8732");
+end

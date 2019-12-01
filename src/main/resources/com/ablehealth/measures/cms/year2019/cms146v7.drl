@@ -1,0 +1,117 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Cms146v7.Denominator'
+when
+    $program: Program(rules contains 'measure.Cms.2019.Cms146v7')
+    $encounter: ClinicalActivity(
+        startsDuring($program.measurementPeriod),
+        endsDuring($program.measurementPeriod),
+        withValueSet("VsacYear2019", "AMBULATORY_ED_VISIT")
+    )
+     $patient: Patient(
+        getAgeInYearsAt($program.measurementPeriod.start) >= 3 &&
+        getAgeInYearsAt($program.measurementPeriod.start) < 18
+     )
+    exists Medication(
+        prescribed == true,
+        providerExternalId == $encounter.providerExternalId,
+        startsDuringDatetime($encounter.startDatetime, $encounter.startDatetime.plusDays(3)),
+        withValueSet("VsacYear2019", "ANTIBIOTIC_MEDICATIONS_FOR_PHARYNGITIS"),
+        codeType == 'RXNORM'
+    )
+    exists Diagnosis (
+        startsDuringDatetime($encounter),
+        withValueSet("VsacYear2019", "ACUTE_PHARYNGITIS") ||
+        withValueSet("VsacYear2019", "ACUTE_TONSILLITIS")
+   )
+
+then
+    insert(new EncounterDenominator($program, $encounter, 'Year2019.Cms146v7'));
+end
+
+rule 'Year2019.Cms146v7.Exclusion.exclusion_antibiotic'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms146v7')
+    (
+        exists Medication(
+            providerExternalId == $encounter.providerExternalId,
+            withValueSet("VsacYear2019", "ANTIBIOTIC_MEDICATIONS_FOR_PHARYNGITIS"),
+            overlaps($encounter.startDate.minusDays(30), $encounter.startDate.minusDays(1)),
+            codeType == 'RXNORM'
+        )
+        or exists Medication(
+            providerExternalId == $encounter.providerExternalId &&
+            withValueSet("VsacYear2019", "ANTIBIOTIC_MEDICATIONS_FOR_PHARYNGITIS") &&
+            codeType == 'RXNORM' &&
+            startsDuring($encounter) &&
+            (
+                (
+                    providerExternalId != $encounter.providerExternalId &&
+                    prescribed == true
+                ) ||
+                (
+                    providerExternalId == $encounter.providerExternalId &&
+                    prescribed != true
+                )
+            )
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Cms146v7', MeasureStatusValue.EXCLUSION, "exclusion_antibiotic");
+end
+
+rule 'Year2019.Cms146v7.Exclusion.exclusion_hospice'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms146v7')
+    (
+        exists ClinicalActivity(
+            endsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "ENCOUNTER_INPATIENT"),
+            withChildValueSet("VsacYear2019", "DISCHARGED_TO_HEALTH_CARE_FACILITY_FOR_HOSPICE_CARE") ||
+            withChildValueSet("VsacYear2019", "DISCHARGED_TO_HOME_FOR_HOSPICE_CARE")
+        )
+        or exists Order(
+            startsDuring($program.measurementPeriod),
+            withValueSet("VsacYear2019", "HOSPICE_CARE_AMBULATORY")
+        )
+        or exists ClinicalActivity(
+            overlaps($program.measurementPeriod),
+            withValueSet("VsacYear2019", "HOSPICE_CARE_AMBULATORY")
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Cms146v7', MeasureStatusValue.EXCLUSION, "exclusion_hospice");
+end
+
+rule 'Year2019.Cms146v7.Success.performance_met'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms146v7')
+    (
+        $ambulatoryEncounter: ClinicalActivity(
+            startsOnOrAfter($encounter.startDatetime),
+            $encounter.stopDatetime == null ||
+            endsOnOrBefore($encounter.stopDatetime),
+            withValueSet("VsacYear2019", "AMBULATORY_ED_VISIT")
+        )
+        and exists LaboratoryTestPerformed(
+            startsDuring($ambulatoryEncounter.stopDate.minusDays(3), $ambulatoryEncounter.stopDate.plusDays(3)),
+            withValueSet("VsacYear2019", "GROUP_A_STREPTOCOCCUS_TEST"),
+            result != null
+        )
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Cms146v7', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Cms146v7.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Cms146v7')
+then
+    controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Cms146v7', MeasureStatusValue.GAP, "performance_not_met");
+end

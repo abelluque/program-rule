@@ -1,0 +1,74 @@
+package com.ablehealth;
+
+import com.ablehealth.model.Patient;
+import com.ablehealth.payloads.Program;
+
+global com.ablehealth.results.PatientResults controlSet;
+
+declare EligibleForCategory
+  period: MeasurementPeriod
+end
+
+rule 'RISK.CMS-HCC.Category'
+when
+  Program($mp: riskCodingPeriod, rules contains 'risk.cms_hcc')
+then
+  insert(new EligibleForCategory($mp));
+end
+
+
+rule 'RISK.CMS-HCC.Category.COMMUNITY_NONDUAL_AGED'
+when
+  EligibleForCategory($mp: period)
+  Patient(!institutionalStatus, dualEligibleStatus not in ('full_benefit', 'partial_benefit'), getAgeInYearsAt($mp.start) >= 65)
+then
+  controlSet.setCategory('COMMUNITY_NONDUAL_AGED');
+end
+
+rule 'RISK.CMS-HCC.Category.COMMUNITY_NONDUAL_DISABLED'
+when
+  EligibleForCategory($mp: period)
+  Patient(!institutionalStatus, dualEligibleStatus not in ('full_benefit', 'partial_benefit'), getAgeInYearsAt($mp.start) < 65)
+then
+  controlSet.setCategory('COMMUNITY_NONDUAL_DISABLED');
+end
+
+rule 'RISK.CMS-HCC.Category.COMMUNITY_FBDUAL_AGED'
+when
+  EligibleForCategory($mp: period)
+  Patient(!institutionalStatus, dualEligibleStatus == 'full_benefit', getAgeInYearsAt($mp.start) >= 65)
+then
+  controlSet.setCategory('COMMUNITY_FBDUAL_AGED');
+end
+
+rule 'RISK.CMS-HCC.Category.COMMUNITY_FBDUAL_DISABLED'
+when
+  EligibleForCategory($mp: period)
+  Patient(!institutionalStatus, dualEligibleStatus == 'full_benefit', getAgeInYearsAt($mp.start) < 65)
+then
+  controlSet.setCategory('COMMUNITY_FBDUAL_DISABLED');
+end
+
+rule 'RISK.CMS-HCC.Category.COMMUNITY_PBDUAL_AGED'
+when
+  EligibleForCategory($mp: period)
+  Patient(!institutionalStatus, dualEligibleStatus == 'partial_benefit', getAgeInYearsAt($mp.start) >= 65)
+then
+  controlSet.setCategory('COMMUNITY_PBDUAL_AGED');
+end
+
+rule 'RISK.CMS-HCC.Category.COMMUNITY_PBDUAL_DISABLED'
+when
+  EligibleForCategory($mp: period)
+  Patient(!institutionalStatus, dualEligibleStatus == 'partial_benefit', getAgeInYearsAt($mp.start) < 65)
+then
+  controlSet.setCategory('COMMUNITY_PBDUAL_DISABLED');
+end
+
+rule 'RISK.CMS-HCC.Category.INSTITUTIONAL'
+when
+  EligibleForCategory()
+  Patient(institutionalStatus)
+then
+  controlSet.setCategory('INSTITUTIONAL');
+end

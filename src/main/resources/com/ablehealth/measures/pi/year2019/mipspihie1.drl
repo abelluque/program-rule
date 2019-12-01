@@ -1,0 +1,41 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mipspihie1.Denominator'
+when
+    $program: Program(rules contains 'measure.Pi.2019.Mipspihie1')
+    $referral: Referral(
+        startsDuring($program.piMeasurementPeriod)
+    )
+then
+    insert(new EncounterDenominator($program, $referral, 'Year2019.Mipspihie1'));
+end
+
+rule 'Year2019.Mipspihie1.Success.performance_met'
+when
+    EncounterDenominator($program: program, $referral: referral, measure == 'Year2019.Mipspihie1')
+    exists SystemEvent(
+        startsDuring($program.piMeasurementPeriod),
+        referralExternalId == $referral.externalId,
+        eventType == "SUMMARY_OF_CARE_CREATION_AND_EXCHANGE"
+    ) and exists SystemEvent(
+       startsDuring($program.piMeasurementPeriod),
+       referralExternalId == $referral.externalId,
+       eventType == "SUMMARY_OF_CARE_RECEIPT"
+    )
+then
+    controlSet.addEncounterMeasureStatus($program, $referral, 'Year2019.Mipspihie1', MeasureStatusValue.SUCCESS, "performance_met");
+end
+
+rule 'Year2019.Mipspihie1.Gap.performance_not_met'
+when
+    EncounterDenominator($program: program, $referral: referral, measure == 'Year2019.Mipspihie1')
+then
+    controlSet.addEncounterMeasureStatus($program, $referral, 'Year2019.Mipspihie1', MeasureStatusValue.GAP, "performance_not_met");
+end
+

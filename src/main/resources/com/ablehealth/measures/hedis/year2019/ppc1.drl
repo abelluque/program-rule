@@ -1,0 +1,210 @@
+package com.ablehealth.measures.hedis.year2019;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Ppc1.Denominator'
+when
+	$program: Program(rules contains 'measure.Hedis.2019.Ppc1')
+	$patient: Patient(
+		isFemale()
+	)
+	$encounter: ClinicalActivity(
+		startsDuring(
+			$program.measurementPeriod.start.minusDays(56),
+			$program.measurementPeriod.end.minusDays(56)
+		),
+		withValueSet("HedisYear2019", "DELIVERIES")
+	)
+	and not (
+		exists Diagnosis(
+			startsDuring($encounter),
+			withValueSet("HedisYear2019", "NON_LIVE_BIRTHS")
+		)
+	)
+	and	not (
+		exists ClinicalActivity(
+			startsDuring(
+				$encounter.startDate.minusMonths(6),
+				$encounter.startDate.minusDays(1)
+			),
+			withValueSet("HedisYear2019", "DELIVERIES")
+		)
+	)
+	and not (
+		exists ClinicalActivity(
+			startsDuring($program.measurementPeriod),
+			withValueSet("MipsYear2019", "MIPS_HOSPICE_SERVICE") ||
+			withValueSet("VsacYear2019", "PALLIATIVE_CARE")
+		)
+	)
+then
+	insert(new EncounterDenominator($program, $encounter, 'Year2019.Ppc1'));
+end
+
+rule 'Year2019.Ppc1.Success.single'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Ppc1')
+	exists ClinicalActivity(
+		startsDuring(
+			$encounter.startDate.minusMonths(9),
+			$encounter.startDate.minusMonths(6)
+		),
+		withValueSet("HedisYear2019", "PRENATAL_BUNDLED_SERVICES") ||
+		withValueSet("HedisYear2019", "STAND_ALONE_PRENATAL_VISITS")
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Ppc1', MeasureStatusValue.SUCCESS, "single");
+end
+
+rule 'Year2019.Ppc1.Success.multiple'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Ppc1')
+	(
+		exists (
+			$visit: ClinicalActivity(
+				startsOnOrAfter($encounter.startDate.minusMonths(9)),
+				startsBefore($encounter.startDate.minusMonths(6)),
+				withValueSet("HedisYear2019", "PRENATAL_VISITS")
+			)
+			and exists Diagnosis(
+				startsDuring($visit),
+				withValueSet("HedisYear2019", "PREGNANCY_DIAGNOSIS")
+			)
+		)
+		or (
+			exists ClinicalActivity(
+				startsOnOrAfter($encounter.startDate.minusMonths(9)),
+				startsOnOrBefore($encounter.startDate.minusMonths(6)),
+				withValueSet("HedisYear2019", "PRENATAL_VISITS")
+			)
+			and exists ClinicalActivity(
+				startsDuring(
+					$encounter.startDate.minusMonths(9),
+					$encounter.startDate.minusMonths(6)
+				),
+				withValueSet("HedisYear2019", "OBSTETRIC_PANEL") ||
+				withValueSet("HedisYear2019", "PRENATAL_ULTRASOUND")
+			)
+		)
+		or (
+			(
+				exists ClinicalActivity(
+					startsDuring(
+						$encounter.startDate.minusMonths(9),
+						$encounter.startDate.minusMonths(6)
+					),
+					withValueSet("HedisYear2019", "TOXOPLASMA_ANTIBODY")
+				)
+				or exists LaboratoryTestPerformed(
+					startsDuring(
+						$encounter.startDate.minusMonths(9),
+						$encounter.startDate.minusMonths(6)
+					),
+					withValueSet("HedisYear2019", "TOXOPLASMA_ANTIBODY")
+				)
+			)
+			and
+			(
+				exists ClinicalActivity(
+					startsDuring(
+						$encounter.startDate.minusMonths(9),
+						$encounter.startDate.minusMonths(6)
+					),
+					withValueSet("HedisYear2019", "RUBELLA_ANTIBODY")
+				)
+				or exists LaboratoryTestPerformed(
+					startsDuring(
+						$encounter.startDate.minusMonths(9),
+						$encounter.startDate.minusMonths(6)
+					),
+					withValueSet("HedisYear2019", "RUBELLA_ANTIBODY")
+				)
+
+			)
+			and
+				(exists LaboratoryTestPerformed(
+					startsDuring(
+						$encounter.startDate.minusMonths(9),
+						$encounter.startDate.minusMonths(6)
+					),
+					withValueSet("HedisYear2019", "CYTOMEGALOVIRUS_ANTIBODY")
+				)
+				or exists ClinicalActivity(
+					startsDuring(
+						$encounter.startDate.minusMonths(9),
+						$encounter.startDate.minusMonths(6)
+					),
+					withValueSet("HedisYear2019", "CYTOMEGALOVIRUS_ANTIBODY")
+				)
+			)
+			and
+			(
+				exists LaboratoryTestPerformed(
+					startsDuring(
+						$encounter.startDate.minusMonths(9),
+						$encounter.startDate.minusMonths(6)
+					),
+					withValueSet("HedisYear2019", "HERPES_SIMPLEX_ANTIBODY")
+				)
+				or	exists ClinicalActivity(
+					startsDuring(
+						$encounter.startDate.minusMonths(9),
+						$encounter.startDate.minusMonths(6)
+					),
+					withValueSet("HedisYear2019", "HERPES_SIMPLEX_ANTIBODY")
+				)
+			)
+		)
+		or (
+			(
+				exists ClinicalActivity(
+					startsDuring(
+						$encounter.startDate.minusMonths(9),
+						$encounter.startDate.minusMonths(6)
+					),
+					withValueSet("HedisYear2019", "RUBELLA_ANTIBODY")
+				)
+				or exists LaboratoryTestPerformed(
+					startsDuring(
+						$encounter.startDate.minusMonths(9),
+						$encounter.startDate.minusMonths(6)
+					),
+					withValueSet("HedisYear2019", "RUBELLA_ANTIBODY")
+				)
+			)
+			and
+			(
+				exists LaboratoryTestPerformed(
+					startsDuring(
+						$encounter.startDate.minusMonths(9),
+						$encounter.startDate.minusMonths(6)
+					),
+					withValueSet("HedisYear2019", "ABO") ||
+					withValueSet("HedisYear2019", "RH") ||
+					withValueSet("HedisYear2019", "ABO_AND_RH")
+				)
+				or exists ClinicalActivity(
+					startsDuring(
+						$encounter.startDate.minusMonths(9),
+						$encounter.startDate.minusMonths(6)
+					),
+					withValueSet("HedisYear2019", "ABO") ||
+					withValueSet("HedisYear2019", "RH")
+				)
+			)
+		)
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Ppc1', MeasureStatusValue.SUCCESS, "multiple");
+end
+
+rule 'Year2019.Ppc1.Gap.performance_not_met'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Ppc1')
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Ppc1', MeasureStatusValue.GAP, "performance_not_met");
+end

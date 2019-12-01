@@ -1,0 +1,65 @@
+package com.ablehealth.measures.mips.year2019;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Mips254.Denominator'
+when
+	$program: Program(rules contains 'measure.Mips.2019.Mips254')
+	$encounter: ClinicalActivity(
+		startsDuring($program.measurementPeriod),
+		placeOfService == '23',
+		withValueSet("MipsYear2019", "MIPS_254_ENCOUNTER")
+	)
+	Patient(
+		getAgeInYearsAt($encounter.startDate) >= 14 &&
+		getAgeInYearsAt($encounter.startDate) < 50,
+		isFemale()
+	)
+	and (
+		exists Diagnosis(
+			overlaps($encounter),
+			withValueSet("MipsYear2019", "OTHER_CONDITION_COMPLICATING_PREGNANCY")
+		)
+		and exists Diagnosis(
+			startsDuring($encounter),
+			withValueSet("MipsYear2019", "ABDOMINAL_PAIN") ||
+			withValueSet("MipsYear2019", "VAGINAL_BLEEDING")
+		)
+	)
+then
+	insert(new EncounterDenominator($program, $encounter, 'Year2019.Mips254'));
+end
+
+rule 'Year2019.Mips254.Success.G8806'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips254')
+	and exists ClinicalActivity(
+		startsDuring($encounter),
+		withValueSet("MipsYear2019", "PERFORMANCE_MET_G8806")
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips254', MeasureStatusValue.SUCCESS, "G8806");
+end
+
+rule 'Year2019.Mips254.Exception.G8807'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips254')
+	and exists ClinicalActivity(
+		startsDuring($encounter),
+		withValueSet("MipsYear2019", "DENOMINATOR_EXCEPTION_G8807")
+	)
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips254', MeasureStatusValue.EXCEPTION, "G8807");
+end
+
+rule 'Year2019.Mips254.Gap.G8808'
+when
+	EncounterDenominator($program: program, $encounter: clinicalActivity, measure == 'Year2019.Mips254')
+then
+	controlSet.addEncounterMeasureStatus($program, $encounter, 'Year2019.Mips254', MeasureStatusValue.GAP, "G8808");
+end
+

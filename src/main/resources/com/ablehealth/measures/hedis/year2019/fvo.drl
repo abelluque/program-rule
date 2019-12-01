@@ -1,0 +1,42 @@
+package com.ablehealth;
+
+import com.ablehealth.model.*
+import com.ablehealth.payloads.*;
+import com.ablehealth.results.*;
+
+global PatientResults controlSet;
+
+rule 'Year2019.Hedis.Fvo.Denominator'
+when
+    $program: Program(rules contains 'measure.Hedis.2019.Fvo')
+    $patient: Patient(
+      getAgeInYearsAt($program.measurementPeriod.end) >= 65
+    )
+then
+    insert(new PatientDenominator($program, $patient, 'Year2019.Fvo'));
+end
+
+rule 'Year2019.Hedis.Fvo.SuccessReasons.PerformanceMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Fvo')
+    (
+      exists ClinicalActivity(
+          startsDuring($program.measurementPeriod.end.minusMonths(6).plusDays(1),$program.measurementPeriod.end),
+          withValueSet("VsacYear2019", "INFLUENZA_VACCINATION") ||
+          withValueSet("VsacYear2019", "PREVIOUS_RECEIPT_OF_INFLUENZA_VACCINE")
+      )
+      or exists Medication(
+          startsDuring($program.measurementPeriod.end.minusMonths(6).plusDays(1),$program.measurementPeriod.end),
+          withValueSet("VsacYear2019", "INFLUENZA_VACCINE")
+      )
+    )
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Fvo', MeasureStatusValue.SUCCESS, 'performance_met');
+end
+
+rule 'Year2019.Hedis.Fvo.GapReasons.PerformanceNotMet'
+when
+    PatientDenominator($program: program, $patient: patient, measure == 'Year2019.Fvo')
+then
+    controlSet.addPatientMeasureStatus($program, $patient, 'Year2019.Fvo', MeasureStatusValue.GAP, 'performance_not_met');
+end
